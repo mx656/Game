@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>Neon Dash Ultimate - Big Screen</title>
+    <title>Neon Dash – Avatar Progression</title>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body {
@@ -18,7 +18,6 @@
         }
         canvas {
             display: block;
-            /* Scale up to fill screen but cap at 900px wide */
             width: 100%;
             max-width: 900px;
             height: auto;
@@ -26,7 +25,6 @@
             box-shadow: 0 0 40px rgba(0, 255, 255, 0.2);
             border-radius: 6px;
             cursor: pointer;
-            /* Keep pixel art crisp when scaled (optional) */
             image-rendering: crisp-edges;
         }
         .info {
@@ -73,15 +71,6 @@
             const SPEED_INCREASE_PER_SCORE = 0.012;
             const LEVEL_SPEED_BOOST = 1.2;
 
-            // Slow-motion effect
-            let slowMoActive = false;
-            let slowMoTimer = 0;
-            const SLOW_MO_FACTOR = 0.5;
-
-            // Score multiplier
-            let scoreMultiplier = 1.0;
-            let multTimer = 0;
-
             // --- Player ---
             let player = {
                 x: PLAYER_X,
@@ -96,9 +85,6 @@
             const JUMP_VEL = -9.2;
             const DOUBLE_JUMP_VEL = -6.5;
 
-            // --- Shield ---
-            let shieldActive = false;
-
             // --- Obstacles ---
             let obstacles = [];
             const OBS_W = 20;
@@ -107,49 +93,29 @@
             let spawnTimer = 0;
             const BASE_SPAWN_DELAY = 70;
 
-            // --- Power‑ups ---
-            let powerups = [];
-            const POWERUP_SIZE = 18;
-            const POWERUP_Y = GROUND_Y - 55;
-            let powerupSpawnTimer = 0;
-            const POWERUP_SPAWN_INTERVAL = 420;
-
             // --- Themes (8 levels) ---
             const themes = [
-                { /* Level 1: Classic Neon */
-                    bg: ['#0a0a14', '#111122'], ground: '#00ffff', obs: '#ff00ff',
-                    player: '#00ffff', stars: '#ffffff', particles: ['#0ff', '#f0f']
-                },
-                { /* Level 2: Ember */
-                    bg: ['#140a0a', '#221111'], ground: '#ffaa00', obs: '#ff4400',
-                    player: '#ffcc00', stars: '#ff8844', particles: ['#ff6600', '#ffcc00']
-                },
-                { /* Level 3: Deep Sea */
-                    bg: ['#0a141a', '#0a1f2b'], ground: '#00ccff', obs: '#0088ff',
-                    player: '#00ffcc', stars: '#88ddff', particles: ['#00aaff', '#00ffff']
-                },
-                { /* Level 4: Toxic Green */
-                    bg: ['#0a140a', '#112211'], ground: '#00ff44', obs: '#44ff00',
-                    player: '#aaff00', stars: '#88ff44', particles: ['#88ff00', '#ccff00']
-                },
-                { /* Level 5: Pink/Purple */
-                    bg: ['#140a14', '#221122'], ground: '#ff44ff', obs: '#ff00aa',
-                    player: '#ff88ff', stars: '#ffaaff', particles: ['#ff44ff', '#ffaaff']
-                },
-                { /* Level 6: Midnight Gold */
-                    bg: ['#0a0a14', '#1a1a2e'], ground: '#ffd700', obs: '#ffaa00',
-                    player: '#ffd700', stars: '#ffe066', particles: ['#ffcc00', '#ffaa00']
-                },
-                { /* Level 7: Fire & Ice */
-                    bg: ['#140a0a', '#0a1414'], ground: '#ff3333', obs: '#33ccff',
-                    player: '#ffffff', stars: '#ff9966', particles: ['#ff3333', '#33ccff']
-                },
-                { /* Level 8: Retro Arcade */
-                    bg: ['#1a0a1a', '#2a0a2a'], ground: '#ffcc00', obs: '#ff0066',
-                    player: '#ccff00', stars: '#ff6699', particles: ['#ffcc00', '#ff0066']
-                }
+                { bg: ['#0a0a14', '#111122'], ground: '#00ffff', obs: '#ff00ff', stars: '#ffffff', particles: ['#0ff', '#f0f'] },
+                { bg: ['#140a0a', '#221111'], ground: '#ffaa00', obs: '#ff4400', stars: '#ff8844', particles: ['#ff6600', '#ffcc00'] },
+                { bg: ['#0a141a', '#0a1f2b'], ground: '#00ccff', obs: '#0088ff', stars: '#88ddff', particles: ['#00aaff', '#00ffff'] },
+                { bg: ['#0a140a', '#112211'], ground: '#00ff44', obs: '#44ff00', stars: '#88ff44', particles: ['#88ff00', '#ccff00'] },
+                { bg: ['#140a14', '#221122'], ground: '#ff44ff', obs: '#ff00aa', stars: '#ffaaff', particles: ['#ff44ff', '#ffaaff'] },
+                { bg: ['#0a0a14', '#1a1a2e'], ground: '#ffd700', obs: '#ffaa00', stars: '#ffe066', particles: ['#ffcc00', '#ffaa00'] },
+                { bg: ['#140a0a', '#0a1414'], ground: '#ff3333', obs: '#33ccff', stars: '#ff9966', particles: ['#ff3333', '#33ccff'] },
+                { bg: ['#1a0a1a', '#2a0a2a'], ground: '#ffcc00', obs: '#ff0066', stars: '#ff6699', particles: ['#ffcc00', '#ff0066'] }
             ];
             let currentTheme = themes[0];
+
+            // --- Avatar system (based on high score) ---
+            const avatarThresholds = [
+                { minScore: 0,   shape: 'square',  color: '#00ffff', glowColor: '#00ffff', name: 'Neon Rookie' },
+                { minScore: 10,  shape: 'diamond', color: '#ff44ff', glowColor: '#ff44ff', name: 'Neon Dasher' },
+                { minScore: 25,  shape: 'circle',  color: '#ffaa00', glowColor: '#ffaa00', name: 'Neon Runner' },
+                { minScore: 50,  shape: 'star',    color: '#00ff44', glowColor: '#00ff44', name: 'Neon Elite' },
+                { minScore: 100, shape: 'hexagon', color: '#ffd700', glowColor: '#ffd700', name: 'Neon Legend' }
+            ];
+            // Current active avatar (determined by highScore)
+            let currentAvatar = avatarThresholds[0];
 
             // --- Effects ---
             let particles = [];
@@ -164,7 +130,7 @@
 
             // --- Leaderboard ---
             let leaderboard = [];
-            const LEADERBOARD_KEY = 'neonDashUltimateLeaderboard';
+            const LEADERBOARD_KEY = 'neonDashAvatarLeaderboard';
             try {
                 const saved = localStorage.getItem(LEADERBOARD_KEY);
                 if (saved) leaderboard = JSON.parse(saved);
@@ -172,6 +138,17 @@
             } catch(e) { leaderboard = []; }
             if (leaderboard.length > 0) highScore = Math.max(...leaderboard);
             else highScore = 0;
+
+            // Update avatar based on current high score
+            function updateAvatarFromHighScore() {
+                for (let i = avatarThresholds.length - 1; i >= 0; i--) {
+                    if (highScore >= avatarThresholds[i].minScore) {
+                        currentAvatar = avatarThresholds[i];
+                        break;
+                    }
+                }
+            }
+            updateAvatarFromHighScore(); // set initial avatar
 
             // ---- Utility ----
             function deltaFactor(dt) { return dt / (1 / 60); }
@@ -188,7 +165,6 @@
                 player.grounded = true;
                 player.doubleJumpAvailable = true;
                 obstacles = [];
-                powerups = [];
                 particles = [];
                 speedLines = [];
                 flashAlpha = 0;
@@ -200,13 +176,7 @@
                 baseSpeed = 5;
                 speed = 5;
                 spawnTimer = 0;
-                powerupSpawnTimer = 0;
                 currentTheme = themes[0];
-                shieldActive = false;
-                slowMoActive = false;
-                slowMoTimer = 0;
-                scoreMultiplier = 1.0;
-                multTimer = 0;
                 gameState = STATE.PLAYING;
             }
 
@@ -227,10 +197,9 @@
                         y: H / 2 - 30,
                         vx: Math.cos(angle) * spd,
                         vy: Math.sin(angle) * spd - 2,
-                        life: 1.0,
-                        decay: 0.025,
+                        life: 1.0, decay: 0.025,
                         size: 4 + Math.random() * 5,
-                        color: currentTheme.ground
+                        color: currentTheme.particles[0]
                     });
                 }
             }
@@ -243,6 +212,7 @@
                     localStorage.setItem(LEADERBOARD_KEY, JSON.stringify(leaderboard));
                 } catch(e) {}
                 highScore = Math.max(...leaderboard);
+                updateAvatarFromHighScore(); // avatar may upgrade
             }
 
             function createDeathParticles() {
@@ -255,8 +225,7 @@
                         x: cx, y: cy,
                         vx: Math.cos(angle) * spd,
                         vy: Math.sin(angle) * spd - 1.5,
-                        life: 1.0,
-                        decay: 0.02 + Math.random() * 0.03,
+                        life: 1.0, decay: 0.02 + Math.random() * 0.03,
                         size: 3 + Math.random() * 5,
                         color: Math.random() < 0.5 ? currentTheme.particles[0] : currentTheme.particles[1]
                     });
@@ -275,24 +244,6 @@
                     width: OBS_W,
                     height: height,
                     counted: false
-                });
-            }
-
-            function spawnPowerup() {
-                const types = ['shield', 'slowmo', 'score2x'];
-                const type = types[Math.floor(Math.random() * types.length)];
-                let color, symbol;
-                if (type === 'shield') { color = '#00ccff'; symbol = '🛡'; }
-                else if (type === 'slowmo') { color = '#ffaa00'; symbol = '⏳'; }
-                else { color = '#ffdd44'; symbol = '✨'; }
-                powerups.push({
-                    x: W,
-                    y: POWERUP_Y,
-                    width: POWERUP_SIZE,
-                    height: POWERUP_SIZE,
-                    type: type,
-                    color: color,
-                    symbol: symbol
                 });
             }
 
@@ -351,18 +302,6 @@
                     return;
                 }
 
-                // Active effect timers
-                if (slowMoActive) {
-                    slowMoTimer -= cappedFactor;
-                    if (slowMoTimer <= 0) { slowMoActive = false; slowMoTimer = 0; }
-                }
-                if (multTimer > 0) {
-                    multTimer -= cappedFactor;
-                    if (multTimer <= 0) { scoreMultiplier = 1.0; multTimer = 0; }
-                }
-
-                const effectiveSpeed = slowMoActive ? speed * SLOW_MO_FACTOR : speed;
-
                 // Player physics
                 player.vy += GRAVITY * cappedFactor;
                 player.y += player.vy * cappedFactor;
@@ -376,29 +315,22 @@
                 }
 
                 // Spawn obstacles
-                const currentDelay = Math.max(26, BASE_SPAWN_DELAY - effectiveSpeed * 3.3);
+                const currentDelay = Math.max(26, BASE_SPAWN_DELAY - speed * 3.3);
                 spawnTimer += cappedFactor;
                 if (spawnTimer >= currentDelay) {
                     spawnTimer = 0;
                     spawnObstacle();
                 }
 
-                // Spawn power‑ups
-                powerupSpawnTimer += cappedFactor;
-                if (powerupSpawnTimer >= POWERUP_SPAWN_INTERVAL && powerups.length === 0) {
-                    powerupSpawnTimer = 0;
-                    if (Math.random() < 0.7) spawnPowerup();
-                }
-
                 // Move obstacles & collision
                 for (let i = obstacles.length - 1; i >= 0; i--) {
                     const obs = obstacles[i];
-                    obs.x -= effectiveSpeed * cappedFactor;
+                    obs.x -= speed * cappedFactor;
 
                     if (!obs.counted && obs.x + obs.width < player.x) {
                         obs.counted = true;
-                        score += 1 * scoreMultiplier;
-                        scoreThisLevel += 1 * scoreMultiplier;
+                        score++;
+                        scoreThisLevel++;
                         const maxSpeedThisLevel = baseSpeed + (LEVEL_SPEED_BOOST * (level - 1));
                         speed = Math.min(maxSpeedThisLevel, baseSpeed + scoreThisLevel * SPEED_INCREASE_PER_SCORE);
 
@@ -418,68 +350,14 @@
                         player.y < obs.y + obs.height &&
                         player.y + player.height > obs.y
                     ) {
-                        if (shieldActive) {
-                            shieldActive = false;
-                            obstacles.splice(i, 1);
-                            flashAlpha = 0.3;
-                            for (let j = 0; j < 8; j++) {
-                                particles.push({
-                                    x: obs.x + obs.width/2, y: obs.y + obs.height/2,
-                                    vx: (Math.random() - 0.5) * 5,
-                                    vy: (Math.random() - 0.5) * 5 - 2,
-                                    life: 0.8, decay: 0.04,
-                                    size: 2 + Math.random() * 3,
-                                    color: '#00ffff'
-                                });
-                            }
-                            continue;
-                        } else {
-                            gameState = STATE.GAMEOVER;
-                            createDeathParticles();
-                            saveToLeaderboard(score);
-                            break;
-                        }
+                        gameState = STATE.GAMEOVER;
+                        createDeathParticles();
+                        saveToLeaderboard(score);
+                        break;
                     }
                 }
 
-                // Move power‑ups & collection
-                for (let i = powerups.length - 1; i >= 0; i--) {
-                    const pu = powerups[i];
-                    pu.x -= effectiveSpeed * cappedFactor;
-                    if (pu.x + pu.width < -10) {
-                        powerups.splice(i, 1);
-                        continue;
-                    }
-                    if (
-                        player.x < pu.x + pu.width &&
-                        player.x + player.width > pu.x &&
-                        player.y < pu.y + pu.height &&
-                        player.y + player.height > pu.y
-                    ) {
-                        if (pu.type === 'shield') {
-                            shieldActive = true;
-                        } else if (pu.type === 'slowmo') {
-                            slowMoActive = true;
-                            slowMoTimer = 180;
-                        } else if (pu.type === 'score2x') {
-                            scoreMultiplier = 2.0;
-                            multTimer = 240;
-                        }
-                        for (let j = 0; j < 10; j++) {
-                            particles.push({
-                                x: pu.x + pu.width/2, y: pu.y + pu.height/2,
-                                vx: (Math.random() - 0.5) * 4,
-                                vy: (Math.random() - 0.5) * 4 - 2,
-                                life: 0.7, decay: 0.04,
-                                size: 2 + Math.random() * 4,
-                                color: pu.color
-                            });
-                        }
-                        powerups.splice(i, 1);
-                    }
-                }
-
-                // Update particles, flash, shake
+                // Particles & flash
                 for (let i = particles.length - 1; i >= 0; i--) {
                     const p = particles[i];
                     p.x += p.vx * cappedFactor;
@@ -490,6 +368,71 @@
                 flashAlpha = Math.max(0, flashAlpha - 0.04 * cappedFactor);
                 levelUpFlash = Math.max(0, levelUpFlash - 0.025 * cappedFactor);
                 shakeAmount = Math.max(0, shakeAmount - 0.6 * cappedFactor);
+            }
+
+            // ---- Draw player with current avatar shape ----
+            function drawPlayer() {
+                const cx = player.x + player.width/2;
+                const cy = player.y + player.height/2;
+                const w = player.width;
+                const h = player.height;
+                ctx.shadowColor = currentAvatar.glowColor;
+                ctx.shadowBlur = 18;
+                ctx.fillStyle = currentAvatar.color;
+                ctx.beginPath();
+
+                switch (currentAvatar.shape) {
+                    case 'square':
+                        ctx.rect(player.x, player.y, w, h);
+                        break;
+                    case 'diamond':
+                        ctx.moveTo(cx, player.y);              // top
+                        ctx.lineTo(player.x + w, cy);          // right
+                        ctx.lineTo(cx, player.y + h);          // bottom
+                        ctx.lineTo(player.x, cy);              // left
+                        ctx.closePath();
+                        break;
+                    case 'circle':
+                        ctx.arc(cx, cy, w/2, 0, Math.PI * 2);
+                        break;
+                    case 'star':
+                        // 5-pointed star
+                        const spikes = 5;
+                        const outerRadius = w/2;
+                        const innerRadius = w/4;
+                        let rot = Math.PI / 2 * 3;
+                        const step = Math.PI / spikes;
+                        for (let i = 0; i < spikes; i++) {
+                            let x = cx + Math.cos(rot) * outerRadius;
+                            let y = cy + Math.sin(rot) * outerRadius;
+                            ctx.lineTo(x, y);
+                            rot += step;
+                            x = cx + Math.cos(rot) * innerRadius;
+                            y = cy + Math.sin(rot) * innerRadius;
+                            ctx.lineTo(x, y);
+                            rot += step;
+                        }
+                        ctx.closePath();
+                        break;
+                    case 'hexagon':
+                        const sides = 6;
+                        const radius = w/2;
+                        const startAngle = Math.PI / 2;
+                        for (let i = 0; i < sides; i++) {
+                            let angle = startAngle + (i * 2 * Math.PI / sides);
+                            let x = cx + radius * Math.cos(angle);
+                            let y = cy + radius * Math.sin(angle);
+                            if (i === 0) ctx.moveTo(x, y);
+                            else ctx.lineTo(x, y);
+                        }
+                        ctx.closePath();
+                        break;
+                    default:
+                        ctx.rect(player.x, player.y, w, h);
+                }
+                ctx.fill();
+                ctx.shadowBlur = 0;
+                ctx.shadowColor = 'transparent';
             }
 
             // ---- Draw ----
@@ -516,7 +459,6 @@
                     ctx.fill();
                 }
                 ctx.shadowBlur = 0;
-                ctx.shadowColor = 'transparent';
 
                 // Speed lines
                 ctx.strokeStyle = 'rgba(255,255,255,0.25)';
@@ -544,7 +486,6 @@
                 }
                 ctx.stroke();
                 ctx.shadowBlur = 0;
-                ctx.shadowColor = 'transparent';
 
                 // Obstacles
                 for (let obs of obstacles) {
@@ -553,38 +494,10 @@
                     ctx.shadowBlur = 14;
                     ctx.fillRect(obs.x, obs.y, obs.width, obs.height);
                 }
+                ctx.shadowBlur = 0;
 
-                // Power-ups
-                for (let pu of powerups) {
-                    ctx.shadowColor = pu.color;
-                    ctx.shadowBlur = 15;
-                    ctx.fillStyle = pu.color;
-                    ctx.beginPath();
-                    ctx.arc(pu.x + pu.width/2, pu.y + pu.height/2, pu.width/2, 0, Math.PI*2);
-                    ctx.fill();
-                    ctx.shadowBlur = 0;
-                    ctx.font = '14px "Courier New", monospace';
-                    ctx.fillStyle = '#fff';
-                    ctx.textAlign = 'center';
-                    ctx.fillText(pu.symbol, pu.x + pu.width/2, pu.y + pu.height/2 + 5);
-                }
-
-                // Player
-                ctx.fillStyle = currentTheme.player;
-                ctx.shadowColor = currentTheme.player;
-                ctx.shadowBlur = 18;
-                ctx.fillRect(player.x, player.y, player.width, player.height);
-
-                // Shield aura
-                if (shieldActive) {
-                    ctx.strokeStyle = '#00ffff';
-                    ctx.lineWidth = 3;
-                    ctx.shadowColor = '#00ffff';
-                    ctx.shadowBlur = 12;
-                    ctx.beginPath();
-                    ctx.arc(player.x + player.width/2, player.y + player.height/2, player.width/2 + 5, 0, Math.PI*2);
-                    ctx.stroke();
-                }
+                // Player (avatar)
+                drawPlayer();
 
                 // Double jump dot
                 if (!player.grounded && player.doubleJumpAvailable) {
@@ -595,9 +508,7 @@
                     ctx.arc(player.x + player.width/2, player.y - 8, 3, 0, Math.PI*2);
                     ctx.fill();
                 }
-
                 ctx.shadowBlur = 0;
-                ctx.shadowColor = 'transparent';
 
                 // Particles
                 for (let p of particles) {
@@ -608,6 +519,7 @@
                     ctx.fillRect(p.x, p.y, p.size, p.size);
                 }
                 ctx.globalAlpha = 1;
+                ctx.shadowBlur = 0;
 
                 // Overlays
                 if (levelUpFlash > 0.01) {
@@ -627,32 +539,47 @@
                 ctx.fillStyle = '#ffffff';
 
                 if (gameState === STATE.START) {
-                    ctx.fillText('NEON DASH ULTIMATE', W/2, H/2 - 55);
+                    ctx.fillText('NEON DASH AVATAR', W/2, H/2 - 55);
                     ctx.font = '11px "Courier New", monospace';
                     ctx.fillText('TAP OR SPACE TO JUMP', W/2, H/2 - 20);
                     ctx.fillText('DOUBLE TAP FOR AIR JUMP', W/2, H/2);
-                    ctx.fillText('COLLECT POWER-UPS: 🛡 ⏳ ✨', W/2, H/2 + 20);
-                    ctx.fillText('8 LEVELS • LOCAL LEADERBOARD', W/2, H/2 + 40);
+                    ctx.fillText('YOUR AVATAR: ' + currentAvatar.name, W/2, H/2 + 20);
+                    // Draw small avatar preview
+                    ctx.save();
+                    ctx.translate(W/2, H/2 + 45);
+                    ctx.fillStyle = currentAvatar.color;
+                    ctx.shadowColor = currentAvatar.glowColor;
+                    ctx.shadowBlur = 12;
+                    switch (currentAvatar.shape) {
+                        case 'square': ctx.fillRect(-10, -10, 20, 20); break;
+                        case 'diamond': ctx.beginPath(); ctx.moveTo(0,-10); ctx.lineTo(10,0); ctx.lineTo(0,10); ctx.lineTo(-10,0); ctx.closePath(); ctx.fill(); break;
+                        case 'circle': ctx.beginPath(); ctx.arc(0,0,10,0,Math.PI*2); ctx.fill(); break;
+                        case 'star':
+                            ctx.beginPath();
+                            for (let i=0; i<5; i++) {
+                                let angle = (i*72 - 90) * Math.PI/180;
+                                let x = Math.cos(angle)*10, y = Math.sin(angle)*10;
+                                i===0 ? ctx.moveTo(x,y) : ctx.lineTo(x,y);
+                                angle = ((i*72)+36 - 90) * Math.PI/180;
+                                x = Math.cos(angle)*5; y = Math.sin(angle)*5;
+                                ctx.lineTo(x,y);
+                            }
+                            ctx.closePath(); ctx.fill(); break;
+                        case 'hexagon':
+                            ctx.beginPath();
+                            for (let i=0; i<6; i++) {
+                                let angle = (i*60) * Math.PI/180;
+                                let x = Math.cos(angle)*10, y = Math.sin(angle)*10;
+                                i===0 ? ctx.moveTo(x,y) : ctx.lineTo(x,y);
+                            }
+                            ctx.closePath(); ctx.fill(); break;
+                    }
+                    ctx.restore();
+                    ctx.shadowBlur = 0;
                 } else if (gameState === STATE.PLAYING) {
-                    ctx.font = 'bold 18px "Courier New", monospace';
                     ctx.fillText(`${score}`, W/2, 45);
                     ctx.font = '12px "Courier New", monospace';
                     ctx.fillText(`LVL ${level}`, W/2, 68);
-                    let fxY = 85;
-                    if (shieldActive) {
-                        ctx.fillStyle = '#00ffff';
-                        ctx.fillText('🛡 SHIELD', W/2, fxY);
-                        fxY += 18;
-                    }
-                    if (slowMoActive) {
-                        ctx.fillStyle = '#ffaa00';
-                        ctx.fillText('⏳ SLOW', W/2, fxY);
-                        fxY += 18;
-                    }
-                    if (scoreMultiplier > 1.0) {
-                        ctx.fillStyle = '#ffdd44';
-                        ctx.fillText(`✨ x${scoreMultiplier}`, W/2, fxY);
-                    }
                 } else if (gameState === STATE.GAMEOVER) {
                     ctx.font = 'bold 20px "Courier New", monospace';
                     ctx.fillText('GAME OVER', W/2, H/2 - 60);
