@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>Neon Dash 3 - Levels & Speed</title>
+    <title>Neon Dash Ultimate - Big Screen</title>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body {
@@ -18,12 +18,16 @@
         }
         canvas {
             display: block;
-            max-width: 100%;
+            /* Scale up to fill screen but cap at 900px wide */
+            width: 100%;
+            max-width: 900px;
             height: auto;
             border: 1px solid #222;
             box-shadow: 0 0 40px rgba(0, 255, 255, 0.2);
             border-radius: 6px;
             cursor: pointer;
+            /* Keep pixel art crisp when scaled (optional) */
+            image-rendering: crisp-edges;
         }
         .info {
             position: absolute;
@@ -59,15 +63,24 @@
             let score = 0;
             let highScore = 0;
             let level = 1;
-            const SCORE_PER_LEVEL = 10;      // points between levels
-            let scoreThisLevel = 0;          // resets each level
+            const SCORE_PER_LEVEL = 10;
+            let scoreThisLevel = 0;
 
             // --- Speed ---
             let speed = 5;
-            let baseSpeed = 5;               // speed at start of each level
-            const MAX_SPEED_BASE = 14;       // maximum allowed speed (will increase per level)
+            let baseSpeed = 5;
+            const MAX_SPEED_BASE = 16;
             const SPEED_INCREASE_PER_SCORE = 0.012;
-            const LEVEL_SPEED_BOOST = 1.2;   // added to speed cap per level
+            const LEVEL_SPEED_BOOST = 1.2;
+
+            // Slow-motion effect
+            let slowMoActive = false;
+            let slowMoTimer = 0;
+            const SLOW_MO_FACTOR = 0.5;
+
+            // Score multiplier
+            let scoreMultiplier = 1.0;
+            let multTimer = 0;
 
             // --- Player ---
             let player = {
@@ -83,6 +96,9 @@
             const JUMP_VEL = -9.2;
             const DOUBLE_JUMP_VEL = -6.5;
 
+            // --- Shield ---
+            let shieldActive = false;
+
             // --- Obstacles ---
             let obstacles = [];
             const OBS_W = 20;
@@ -91,91 +107,88 @@
             let spawnTimer = 0;
             const BASE_SPAWN_DELAY = 70;
 
-            // --- Visual Themes (per level) ---
+            // --- Power‑ups ---
+            let powerups = [];
+            const POWERUP_SIZE = 18;
+            const POWERUP_Y = GROUND_Y - 55;
+            let powerupSpawnTimer = 0;
+            const POWERUP_SPAWN_INTERVAL = 420;
+
+            // --- Themes (8 levels) ---
             const themes = [
-                { /* Level 1: classic neon */
-                    bg: ['#0a0a14', '#111122'],
-                    ground: '#00ffff',
-                    obs: '#ff00ff',
-                    player: '#00ffff',
-                    stars: '#ffffff',
-                    particles: ['#0ff', '#f0f']
+                { /* Level 1: Classic Neon */
+                    bg: ['#0a0a14', '#111122'], ground: '#00ffff', obs: '#ff00ff',
+                    player: '#00ffff', stars: '#ffffff', particles: ['#0ff', '#f0f']
                 },
-                { /* Level 2: ember / sunset */
-                    bg: ['#140a0a', '#221111'],
-                    ground: '#ffaa00',
-                    obs: '#ff4400',
-                    player: '#ffcc00',
-                    stars: '#ff8844',
-                    particles: ['#ff6600', '#ffcc00']
+                { /* Level 2: Ember */
+                    bg: ['#140a0a', '#221111'], ground: '#ffaa00', obs: '#ff4400',
+                    player: '#ffcc00', stars: '#ff8844', particles: ['#ff6600', '#ffcc00']
                 },
-                { /* Level 3: deep sea */
-                    bg: ['#0a141a', '#0a1f2b'],
-                    ground: '#00ccff',
-                    obs: '#0088ff',
-                    player: '#00ffcc',
-                    stars: '#88ddff',
-                    particles: ['#00aaff', '#00ffff']
+                { /* Level 3: Deep Sea */
+                    bg: ['#0a141a', '#0a1f2b'], ground: '#00ccff', obs: '#0088ff',
+                    player: '#00ffcc', stars: '#88ddff', particles: ['#00aaff', '#00ffff']
                 },
-                { /* Level 4: toxic green */
-                    bg: ['#0a140a', '#112211'],
-                    ground: '#00ff44',
-                    obs: '#44ff00',
-                    player: '#aaff00',
-                    stars: '#88ff44',
-                    particles: ['#88ff00', '#ccff00']
+                { /* Level 4: Toxic Green */
+                    bg: ['#0a140a', '#112211'], ground: '#00ff44', obs: '#44ff00',
+                    player: '#aaff00', stars: '#88ff44', particles: ['#88ff00', '#ccff00']
                 },
-                { /* Level 5: pink / purple */
-                    bg: ['#140a14', '#221122'],
-                    ground: '#ff44ff',
-                    obs: '#ff00aa',
-                    player: '#ff88ff',
-                    stars: '#ffaaff',
-                    particles: ['#ff44ff', '#ffaaff']
+                { /* Level 5: Pink/Purple */
+                    bg: ['#140a14', '#221122'], ground: '#ff44ff', obs: '#ff00aa',
+                    player: '#ff88ff', stars: '#ffaaff', particles: ['#ff44ff', '#ffaaff']
+                },
+                { /* Level 6: Midnight Gold */
+                    bg: ['#0a0a14', '#1a1a2e'], ground: '#ffd700', obs: '#ffaa00',
+                    player: '#ffd700', stars: '#ffe066', particles: ['#ffcc00', '#ffaa00']
+                },
+                { /* Level 7: Fire & Ice */
+                    bg: ['#140a0a', '#0a1414'], ground: '#ff3333', obs: '#33ccff',
+                    player: '#ffffff', stars: '#ff9966', particles: ['#ff3333', '#33ccff']
+                },
+                { /* Level 8: Retro Arcade */
+                    bg: ['#1a0a1a', '#2a0a2a'], ground: '#ffcc00', obs: '#ff0066',
+                    player: '#ccff00', stars: '#ff6699', particles: ['#ffcc00', '#ff0066']
                 }
             ];
-
-            // Current theme (updated on level change)
             let currentTheme = themes[0];
 
             // --- Effects ---
             let particles = [];
             let flashAlpha = 0;
-            let levelUpFlash = 0;        // extra flash for level up
-            let shakeAmount = 0;         // screen shake
+            let levelUpFlash = 0;
+            let shakeAmount = 0;
+            let speedLines = [];
 
-            // --- Background stars ---
+            // --- Stars ---
             let stars = [];
             const STAR_COUNT = 60;
 
-            // --- Speed lines (for fast movement) ---
-            let speedLines = [];
-
-            // Load high score
+            // --- Leaderboard ---
+            let leaderboard = [];
+            const LEADERBOARD_KEY = 'neonDashUltimateLeaderboard';
             try {
-                const saved = localStorage.getItem('neonDash3HighScore');
-                if (saved) highScore = parseInt(saved, 10) || 0;
-            } catch(e){}
+                const saved = localStorage.getItem(LEADERBOARD_KEY);
+                if (saved) leaderboard = JSON.parse(saved);
+                else leaderboard = [];
+            } catch(e) { leaderboard = []; }
+            if (leaderboard.length > 0) highScore = Math.max(...leaderboard);
+            else highScore = 0;
 
             // ---- Utility ----
-            function deltaFactor(dt) {
-                return dt / (1 / 60);
-            }
+            function deltaFactor(dt) { return dt / (1 / 60); }
 
-            // Get max clearable obstacle height for current speed (always jumpable)
             function getMaxClearableHeight(currentSpeed) {
                 const peak = (JUMP_VEL * JUMP_VEL) / (2 * GRAVITY);
                 const safetyFactor = Math.max(0.4, 1.0 - currentSpeed * 0.035);
                 return Math.floor(peak * safetyFactor - 4);
             }
 
-            // Reset for new game
             function resetGame() {
                 player.y = GROUND_Y - PLAYER_H;
                 player.vy = 0;
                 player.grounded = true;
                 player.doubleJumpAvailable = true;
                 obstacles = [];
+                powerups = [];
                 particles = [];
                 speedLines = [];
                 flashAlpha = 0;
@@ -187,47 +200,55 @@
                 baseSpeed = 5;
                 speed = 5;
                 spawnTimer = 0;
+                powerupSpawnTimer = 0;
                 currentTheme = themes[0];
+                shieldActive = false;
+                slowMoActive = false;
+                slowMoTimer = 0;
+                scoreMultiplier = 1.0;
+                multTimer = 0;
                 gameState = STATE.PLAYING;
             }
 
-            // Advance to next level
             function advanceLevel() {
                 level++;
-                // Speed cap increases
-                baseSpeed = Math.min(level * 1.2 + 3.8, 25);  // level 1:5, 2:6.2, 3:7.4, 4:8.6, 5:9.8...
-                speed = baseSpeed;  // reset to new base at level start
+                baseSpeed = Math.min(level * 1.2 + 3.8, 25);
+                speed = baseSpeed;
                 scoreThisLevel = 0;
-
-                // Change theme (cycle)
                 const themeIndex = (level - 1) % themes.length;
                 currentTheme = themes[themeIndex];
-
-                // Visual feedback: flash and some celebration particles
                 levelUpFlash = 0.7;
                 shakeAmount = 6;
-
-                // Spawn celebratory particles
-                for (let i=0; i<20; i++) {
+                for (let i = 0; i < 20; i++) {
                     const angle = Math.random() * Math.PI * 2;
                     const spd = 3 + Math.random() * 6;
                     particles.push({
-                        x: W/2 + (Math.random()-0.5)*100,
-                        y: H/2 - 30,
+                        x: W / 2 + (Math.random() - 0.5) * 100,
+                        y: H / 2 - 30,
                         vx: Math.cos(angle) * spd,
                         vy: Math.sin(angle) * spd - 2,
                         life: 1.0,
                         decay: 0.025,
-                        size: 4 + Math.random()*5,
+                        size: 4 + Math.random() * 5,
                         color: currentTheme.ground
                     });
                 }
             }
 
+            function saveToLeaderboard(finalScore) {
+                leaderboard.push(finalScore);
+                leaderboard.sort((a, b) => b - a);
+                if (leaderboard.length > 10) leaderboard.pop();
+                try {
+                    localStorage.setItem(LEADERBOARD_KEY, JSON.stringify(leaderboard));
+                } catch(e) {}
+                highScore = Math.max(...leaderboard);
+            }
+
             function createDeathParticles() {
                 const count = 16;
                 const cx = player.x + player.width/2, cy = player.y + player.height/2;
-                for (let i=0; i<count; i++) {
+                for (let i = 0; i < count; i++) {
                     const angle = Math.random() * Math.PI * 2;
                     const spd = 2 + Math.random() * 5;
                     particles.push({
@@ -235,9 +256,9 @@
                         vx: Math.cos(angle) * spd,
                         vy: Math.sin(angle) * spd - 1.5,
                         life: 1.0,
-                        decay: 0.02 + Math.random()*0.03,
-                        size: 3 + Math.random()*5,
-                        color: Math.random()<0.5 ? currentTheme.particles[0] : currentTheme.particles[1]
+                        decay: 0.02 + Math.random() * 0.03,
+                        size: 3 + Math.random() * 5,
+                        color: Math.random() < 0.5 ? currentTheme.particles[0] : currentTheme.particles[1]
                     });
                 }
                 flashAlpha = 0.5;
@@ -257,10 +278,27 @@
                 });
             }
 
-            // Initialize stars
+            function spawnPowerup() {
+                const types = ['shield', 'slowmo', 'score2x'];
+                const type = types[Math.floor(Math.random() * types.length)];
+                let color, symbol;
+                if (type === 'shield') { color = '#00ccff'; symbol = '🛡'; }
+                else if (type === 'slowmo') { color = '#ffaa00'; symbol = '⏳'; }
+                else { color = '#ffdd44'; symbol = '✨'; }
+                powerups.push({
+                    x: W,
+                    y: POWERUP_Y,
+                    width: POWERUP_SIZE,
+                    height: POWERUP_SIZE,
+                    type: type,
+                    color: color,
+                    symbol: symbol
+                });
+            }
+
             function initStars() {
                 stars = [];
-                for (let i=0; i<STAR_COUNT; i++) {
+                for (let i = 0; i < STAR_COUNT; i++) {
                     stars.push({
                         x: Math.random() * W,
                         y: Math.random() * (GROUND_Y - 10),
@@ -279,40 +317,33 @@
                 // Update stars
                 for (let s of stars) {
                     s.x -= s.speed * cappedFactor * 0.5;
-                    if (s.x < -5) {
-                        s.x = W + 5;
-                        s.y = Math.random() * (GROUND_Y - 10);
-                    }
+                    if (s.x < -5) { s.x = W + 5; s.y = Math.random() * (GROUND_Y - 10); }
                 }
 
-                // Update speed lines (horizontal streaks when moving fast)
+                // Speed lines
                 if (gameState === STATE.PLAYING && speed > 6) {
-                    // spawn speed lines
                     if (Math.random() < 0.3 * cappedFactor) {
                         speedLines.push({
-                            x: Math.random() * W,
-                            y: Math.random() * GROUND_Y,
-                            length: 20 + Math.random() * 60,
-                            life: 1.0,
-                            decay: 0.02 + speed*0.005
+                            x: Math.random() * W, y: Math.random() * GROUND_Y,
+                            length: 20 + Math.random() * 60, life: 1.0,
+                            decay: 0.02 + speed * 0.005
                         });
                     }
                 }
-                for (let i=speedLines.length-1; i>=0; i--) {
+                for (let i = speedLines.length - 1; i >= 0; i--) {
                     const l = speedLines[i];
                     l.x -= speed * 1.2 * cappedFactor;
                     l.life -= l.decay * cappedFactor;
-                    if (l.life <= 0 || l.x + l.length < -20) speedLines.splice(i,1);
+                    if (l.life <= 0 || l.x + l.length < -20) speedLines.splice(i, 1);
                 }
 
                 if (gameState !== STATE.PLAYING) {
-                    // Update particles, flash, shake even on gameover
-                    for (let i=particles.length-1; i>=0; i--) {
+                    for (let i = particles.length - 1; i >= 0; i--) {
                         const p = particles[i];
                         p.x += p.vx * cappedFactor;
                         p.y += p.vy * cappedFactor;
                         p.life -= p.decay * cappedFactor;
-                        if (p.life <= 0) particles.splice(i,1);
+                        if (p.life <= 0) particles.splice(i, 1);
                     }
                     flashAlpha = Math.max(0, flashAlpha - 0.03 * cappedFactor);
                     levelUpFlash = Math.max(0, levelUpFlash - 0.02 * cappedFactor);
@@ -320,11 +351,21 @@
                     return;
                 }
 
-                // --- Player physics ---
+                // Active effect timers
+                if (slowMoActive) {
+                    slowMoTimer -= cappedFactor;
+                    if (slowMoTimer <= 0) { slowMoActive = false; slowMoTimer = 0; }
+                }
+                if (multTimer > 0) {
+                    multTimer -= cappedFactor;
+                    if (multTimer <= 0) { scoreMultiplier = 1.0; multTimer = 0; }
+                }
+
+                const effectiveSpeed = slowMoActive ? speed * SLOW_MO_FACTOR : speed;
+
+                // Player physics
                 player.vy += GRAVITY * cappedFactor;
                 player.y += player.vy * cappedFactor;
-
-                // Ground
                 if (player.y + player.height >= GROUND_Y) {
                     player.y = GROUND_Y - player.height;
                     player.vy = 0;
@@ -334,63 +375,117 @@
                     player.grounded = false;
                 }
 
-                // --- Spawn obstacles ---
-                const currentDelay = Math.max(26, BASE_SPAWN_DELAY - speed * 3.3);
+                // Spawn obstacles
+                const currentDelay = Math.max(26, BASE_SPAWN_DELAY - effectiveSpeed * 3.3);
                 spawnTimer += cappedFactor;
                 if (spawnTimer >= currentDelay) {
                     spawnTimer = 0;
                     spawnObstacle();
                 }
 
-                // --- Move obstacles, collision, scoring ---
-                for (let i=obstacles.length-1; i>=0; i--) {
+                // Spawn power‑ups
+                powerupSpawnTimer += cappedFactor;
+                if (powerupSpawnTimer >= POWERUP_SPAWN_INTERVAL && powerups.length === 0) {
+                    powerupSpawnTimer = 0;
+                    if (Math.random() < 0.7) spawnPowerup();
+                }
+
+                // Move obstacles & collision
+                for (let i = obstacles.length - 1; i >= 0; i--) {
                     const obs = obstacles[i];
-                    obs.x -= speed * cappedFactor;
+                    obs.x -= effectiveSpeed * cappedFactor;
 
                     if (!obs.counted && obs.x + obs.width < player.x) {
                         obs.counted = true;
-                        score++;
-                        scoreThisLevel++;
-                        // Increase speed gradually within current level's cap
-                        const maxSpeedThisLevel = baseSpeed + (LEVEL_SPEED_BOOST * (level-1));
+                        score += 1 * scoreMultiplier;
+                        scoreThisLevel += 1 * scoreMultiplier;
+                        const maxSpeedThisLevel = baseSpeed + (LEVEL_SPEED_BOOST * (level - 1));
                         speed = Math.min(maxSpeedThisLevel, baseSpeed + scoreThisLevel * SPEED_INCREASE_PER_SCORE);
 
-                        // Check level advance
                         if (scoreThisLevel >= SCORE_PER_LEVEL) {
                             advanceLevel();
-                            // Re-apply speed lines removal? Not needed.
                         }
                     }
 
                     if (obs.x + obs.width < -10) {
-                        obstacles.splice(i,1);
+                        obstacles.splice(i, 1);
                         continue;
                     }
 
-                    // Collision
                     if (
                         player.x < obs.x + obs.width &&
                         player.x + player.width > obs.x &&
                         player.y < obs.y + obs.height &&
                         player.y + player.height > obs.y
                     ) {
-                        gameState = STATE.GAMEOVER;
-                        createDeathParticles();
-                        if (score > highScore) {
-                            highScore = score;
-                            try { localStorage.setItem('neonDash3HighScore', highScore); } catch(e){}
+                        if (shieldActive) {
+                            shieldActive = false;
+                            obstacles.splice(i, 1);
+                            flashAlpha = 0.3;
+                            for (let j = 0; j < 8; j++) {
+                                particles.push({
+                                    x: obs.x + obs.width/2, y: obs.y + obs.height/2,
+                                    vx: (Math.random() - 0.5) * 5,
+                                    vy: (Math.random() - 0.5) * 5 - 2,
+                                    life: 0.8, decay: 0.04,
+                                    size: 2 + Math.random() * 3,
+                                    color: '#00ffff'
+                                });
+                            }
+                            continue;
+                        } else {
+                            gameState = STATE.GAMEOVER;
+                            createDeathParticles();
+                            saveToLeaderboard(score);
+                            break;
                         }
-                        break;
                     }
                 }
 
-                // --- Update particles, flash, shake ---
-                for (let i=particles.length-1; i>=0; i--) {
+                // Move power‑ups & collection
+                for (let i = powerups.length - 1; i >= 0; i--) {
+                    const pu = powerups[i];
+                    pu.x -= effectiveSpeed * cappedFactor;
+                    if (pu.x + pu.width < -10) {
+                        powerups.splice(i, 1);
+                        continue;
+                    }
+                    if (
+                        player.x < pu.x + pu.width &&
+                        player.x + player.width > pu.x &&
+                        player.y < pu.y + pu.height &&
+                        player.y + player.height > pu.y
+                    ) {
+                        if (pu.type === 'shield') {
+                            shieldActive = true;
+                        } else if (pu.type === 'slowmo') {
+                            slowMoActive = true;
+                            slowMoTimer = 180;
+                        } else if (pu.type === 'score2x') {
+                            scoreMultiplier = 2.0;
+                            multTimer = 240;
+                        }
+                        for (let j = 0; j < 10; j++) {
+                            particles.push({
+                                x: pu.x + pu.width/2, y: pu.y + pu.height/2,
+                                vx: (Math.random() - 0.5) * 4,
+                                vy: (Math.random() - 0.5) * 4 - 2,
+                                life: 0.7, decay: 0.04,
+                                size: 2 + Math.random() * 4,
+                                color: pu.color
+                            });
+                        }
+                        powerups.splice(i, 1);
+                    }
+                }
+
+                // Update particles, flash, shake
+                for (let i = particles.length - 1; i >= 0; i--) {
                     const p = particles[i];
                     p.x += p.vx * cappedFactor;
                     p.y += p.vy * cappedFactor;
                     p.life -= p.decay * cappedFactor;
-                    if (p.life <= 0) particles.splice(i,1);
+                    if (p.life <= 0) particles.splice(i, 1);
                 }
                 flashAlpha = Math.max(0, flashAlpha - 0.04 * cappedFactor);
                 levelUpFlash = Math.max(0, levelUpFlash - 0.025 * cappedFactor);
@@ -399,16 +494,12 @@
 
             // ---- Draw ----
             function draw() {
-                // Screen shake offset
                 const shakeX = shakeAmount ? (Math.random() - 0.5) * shakeAmount : 0;
                 const shakeY = shakeAmount ? (Math.random() - 0.5) * shakeAmount : 0;
-
                 ctx.save();
                 ctx.translate(shakeX, shakeY);
 
                 ctx.clearRect(0, 0, W, H);
-
-                // Background gradient from current theme
                 const bgGrad = ctx.createLinearGradient(0, 0, 0, H);
                 bgGrad.addColorStop(0, currentTheme.bg[0]);
                 bgGrad.addColorStop(0.7, currentTheme.bg[1]);
@@ -421,7 +512,7 @@
                 ctx.fillStyle = currentTheme.stars;
                 for (let s of stars) {
                     ctx.beginPath();
-                    ctx.arc(s.x, s.y, s.radius, 0, Math.PI*2);
+                    ctx.arc(s.x, s.y, s.radius, 0, Math.PI * 2);
                     ctx.fill();
                 }
                 ctx.shadowBlur = 0;
@@ -439,15 +530,13 @@
                 }
                 ctx.globalAlpha = 1;
 
-                // Ground line (scrolling effect: draw multiple dashes)
+                // Ground
                 ctx.beginPath();
                 ctx.strokeStyle = currentTheme.ground;
                 ctx.lineWidth = 2;
                 ctx.shadowColor = currentTheme.ground;
                 ctx.shadowBlur = 12;
-                const dashLength = 30;
-                const dashGap = 15;
-                const totalDash = dashLength + dashGap;
+                const dashLength = 30, dashGap = 15, totalDash = dashLength + dashGap;
                 const offset = (Date.now() * speed * 0.03) % totalDash;
                 for (let x = -offset; x < W + totalDash; x += totalDash) {
                     ctx.moveTo(x, GROUND_Y);
@@ -465,13 +554,39 @@
                     ctx.fillRect(obs.x, obs.y, obs.width, obs.height);
                 }
 
+                // Power-ups
+                for (let pu of powerups) {
+                    ctx.shadowColor = pu.color;
+                    ctx.shadowBlur = 15;
+                    ctx.fillStyle = pu.color;
+                    ctx.beginPath();
+                    ctx.arc(pu.x + pu.width/2, pu.y + pu.height/2, pu.width/2, 0, Math.PI*2);
+                    ctx.fill();
+                    ctx.shadowBlur = 0;
+                    ctx.font = '14px "Courier New", monospace';
+                    ctx.fillStyle = '#fff';
+                    ctx.textAlign = 'center';
+                    ctx.fillText(pu.symbol, pu.x + pu.width/2, pu.y + pu.height/2 + 5);
+                }
+
                 // Player
                 ctx.fillStyle = currentTheme.player;
                 ctx.shadowColor = currentTheme.player;
                 ctx.shadowBlur = 18;
                 ctx.fillRect(player.x, player.y, player.width, player.height);
 
-                // Double jump indicator
+                // Shield aura
+                if (shieldActive) {
+                    ctx.strokeStyle = '#00ffff';
+                    ctx.lineWidth = 3;
+                    ctx.shadowColor = '#00ffff';
+                    ctx.shadowBlur = 12;
+                    ctx.beginPath();
+                    ctx.arc(player.x + player.width/2, player.y + player.height/2, player.width/2 + 5, 0, Math.PI*2);
+                    ctx.stroke();
+                }
+
+                // Double jump dot
                 if (!player.grounded && player.doubleJumpAvailable) {
                     ctx.fillStyle = '#ffffff';
                     ctx.shadowColor = '#ffffff';
@@ -493,18 +608,15 @@
                     ctx.fillRect(p.x, p.y, p.size, p.size);
                 }
                 ctx.globalAlpha = 1;
-                ctx.shadowBlur = 0;
-                ctx.shadowColor = 'transparent';
 
-                // Level‑up flash overlay
+                // Overlays
                 if (levelUpFlash > 0.01) {
                     ctx.fillStyle = `rgba(255,255,255,${levelUpFlash * 0.5})`;
-                    ctx.fillRect(0,0,W,H);
+                    ctx.fillRect(0, 0, W, H);
                 }
-                // Death flash
                 if (flashAlpha > 0.01) {
                     ctx.fillStyle = `rgba(255,100,150,${flashAlpha * 0.4})`;
-                    ctx.fillRect(0,0,W,H);
+                    ctx.fillRect(0, 0, W, H);
                 }
 
                 // UI
@@ -515,41 +627,60 @@
                 ctx.fillStyle = '#ffffff';
 
                 if (gameState === STATE.START) {
-                    ctx.fillText('NEON DASH 3', W/2, H/2 - 45);
-                    ctx.font = '12px "Courier New", monospace';
-                    ctx.fillText('TAP OR SPACE TO JUMP', W/2, H/2 - 10);
-                    ctx.fillText('DOUBLE TAP FOR AIR JUMP', W/2, H/2 + 10);
-                    ctx.fillText('LEVELS CHANGE THEME & SPEED', W/2, H/2 + 30);
+                    ctx.fillText('NEON DASH ULTIMATE', W/2, H/2 - 55);
+                    ctx.font = '11px "Courier New", monospace';
+                    ctx.fillText('TAP OR SPACE TO JUMP', W/2, H/2 - 20);
+                    ctx.fillText('DOUBLE TAP FOR AIR JUMP', W/2, H/2);
+                    ctx.fillText('COLLECT POWER-UPS: 🛡 ⏳ ✨', W/2, H/2 + 20);
+                    ctx.fillText('8 LEVELS • LOCAL LEADERBOARD', W/2, H/2 + 40);
                 } else if (gameState === STATE.PLAYING) {
-                    // Score and level
                     ctx.font = 'bold 18px "Courier New", monospace';
                     ctx.fillText(`${score}`, W/2, 45);
-                    ctx.font = '13px "Courier New", monospace';
+                    ctx.font = '12px "Courier New", monospace';
                     ctx.fillText(`LVL ${level}`, W/2, 68);
+                    let fxY = 85;
+                    if (shieldActive) {
+                        ctx.fillStyle = '#00ffff';
+                        ctx.fillText('🛡 SHIELD', W/2, fxY);
+                        fxY += 18;
+                    }
+                    if (slowMoActive) {
+                        ctx.fillStyle = '#ffaa00';
+                        ctx.fillText('⏳ SLOW', W/2, fxY);
+                        fxY += 18;
+                    }
+                    if (scoreMultiplier > 1.0) {
+                        ctx.fillStyle = '#ffdd44';
+                        ctx.fillText(`✨ x${scoreMultiplier}`, W/2, fxY);
+                    }
                 } else if (gameState === STATE.GAMEOVER) {
                     ctx.font = 'bold 20px "Courier New", monospace';
-                    ctx.fillText('GAME OVER', W/2, H/2 - 40);
-                    ctx.font = '16px "Courier New", monospace';
-                    ctx.fillText(`SCORE: ${score}`, W/2, H/2);
-                    ctx.fillText(`BEST: ${highScore}`, W/2, H/2 + 25);
+                    ctx.fillText('GAME OVER', W/2, H/2 - 60);
+                    ctx.font = '14px "Courier New", monospace';
+                    ctx.fillText(`SCORE: ${score}`, W/2, H/2 - 30);
+                    ctx.fillText(`BEST: ${highScore}`, W/2, H/2 - 10);
                     ctx.font = '12px "Courier New", monospace';
-                    ctx.fillText('TAP TO RESTART', W/2, H/2 + 50);
+                    ctx.fillText('TOP 5', W/2, H/2 + 15);
+                    const top5 = leaderboard.slice(0, 5);
+                    for (let i = 0; i < top5.length; i++) {
+                        ctx.fillText(`${i+1}. ${top5[i]}`, W/2, H/2 + 35 + i*18);
+                    }
+                    ctx.font = '11px "Courier New", monospace';
+                    ctx.fillText('TAP TO RESTART', W/2, H/2 + 130);
                 }
-
                 ctx.shadowBlur = 0;
                 ctx.shadowColor = 'transparent';
                 ctx.textAlign = 'left';
                 ctx.restore();
             }
 
-            // ---- Game loop ----
+            // ---- Loop ----
             let lastTimestamp = 0;
             function gameLoop(ts) {
                 if (!lastTimestamp) lastTimestamp = ts;
                 let dt = (ts - lastTimestamp) / 1000;
                 if (dt <= 0) dt = 0.016;
                 lastTimestamp = ts;
-
                 update(dt);
                 draw();
                 requestAnimationFrame(gameLoop);
@@ -557,9 +688,8 @@
 
             // ---- Input ----
             function handleJump() {
-                if (gameState === STATE.START) {
-                    resetGame();
-                } else if (gameState === STATE.PLAYING) {
+                if (gameState === STATE.START) resetGame();
+                else if (gameState === STATE.PLAYING) {
                     if (player.grounded) {
                         player.vy = JUMP_VEL;
                         player.grounded = false;
@@ -567,30 +697,21 @@
                     } else if (player.doubleJumpAvailable) {
                         player.vy = DOUBLE_JUMP_VEL;
                         player.doubleJumpAvailable = false;
-                        // burst particles
                         for (let i=0; i<6; i++) {
                             particles.push({
                                 x: player.x + player.width/2,
                                 y: player.y + player.height,
-                                vx: (Math.random()-0.5)*3,
-                                vy: -2 - Math.random()*3,
-                                life: 0.7,
-                                decay: 0.05,
-                                size: 2+Math.random()*3,
-                                color: '#ffffff'
+                                vx: (Math.random()-0.5)*3, vy: -2 - Math.random()*3,
+                                life: 0.7, decay: 0.05,
+                                size: 2+Math.random()*3, color: '#ffffff'
                             });
                         }
                     }
-                } else if (gameState === STATE.GAMEOVER) {
-                    resetGame();
-                }
+                } else if (gameState === STATE.GAMEOVER) resetGame();
             }
 
             document.addEventListener('keydown', e => {
-                if (e.code === 'Space' || e.key === ' ') {
-                    e.preventDefault();
-                    handleJump();
-                }
+                if (e.code === 'Space' || e.key === ' ') { e.preventDefault(); handleJump(); }
             });
             canvas.addEventListener('mousedown', e => { e.preventDefault(); handleJump(); });
             canvas.addEventListener('touchstart', e => { e.preventDefault(); handleJump(); }, { passive: false });
