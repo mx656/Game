@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>Neon Dash - Endless Runner</title>
+    <title>Neon Dash 2 - Always Fair</title>
     <style>
         * {
             margin: 0;
@@ -18,7 +18,7 @@
             min-height: 100vh;
             overflow: hidden;
             font-family: 'Courier New', monospace;
-            touch-action: manipulation; /* disable double-tap zoom */
+            touch-action: manipulation;
         }
         canvas {
             display: block;
@@ -41,80 +41,88 @@
     </style>
 </head>
 <body>
-    <canvas id="gameCanvas" width="480" height="320" aria-label="Neon Dash game canvas"></canvas>
-    <div class="info">TAP / SPACE TO JUMP</div>
+    <canvas id="gameCanvas" width="480" height="320" aria-label="Neon Dash canvas"></canvas>
+    <div class="info">TAP / SPACE TO JUMP | DOUBLE TAP FOR EXTRA JUMP</div>
 
     <script>
         (function() {
             const canvas = document.getElementById('gameCanvas');
             const ctx = canvas.getContext('2d');
 
-            // Game dimensions
             const W = canvas.width;
             const H = canvas.height;
-            const GROUND_Y = H - 40;          // ground line
+            const GROUND_Y = H - 40;
+
             const PLAYER_WIDTH = 22;
             const PLAYER_HEIGHT = 22;
-            const PLAYER_X = 70;              // fixed horizontal position
+            const PLAYER_X = 70;
 
-            // Game state
             const STATE = { START: 'start', PLAYING: 'playing', GAMEOVER: 'gameover' };
             let gameState = STATE.START;
             let score = 0;
             let highScore = 0;
-            let speed = 5;                    // base obstacle speed (pixels per frame at 60fps)
-            const MAX_SPEED = 14;
-            const SPEED_INCREASE_PER_SCORE = 0.015;
+            let speed = 5;
+            const MAX_SPEED = 13;
+            const SPEED_INCREASE_PER_SCORE = 0.01;
 
-            // Player
+            // Player with double jump
             let player = {
                 x: PLAYER_X,
                 y: GROUND_Y - PLAYER_HEIGHT,
                 width: PLAYER_WIDTH,
                 height: PLAYER_HEIGHT,
                 vy: 0,
-                grounded: true
+                grounded: true,
+                doubleJumpAvailable: true
             };
 
-            const GRAVITY = 0.65;             // per frame at 60fps
-            const JUMP_VELOCITY = -8.5;
+            const GRAVITY = 0.55;
+            const JUMP_VELOCITY = -9.2;       // higher than before
+            const DOUBLE_JUMP_VELOCITY = -6.5;
 
-            // Obstacles
+            // Obstacles – now capped based on current speed
             let obstacles = [];
             const OBSTACLE_WIDTH = 20;
-            const OBSTACLE_MIN_HEIGHT = 28;
-            const OBSTACLE_MAX_HEIGHT = 50;
+            const BASE_MIN_HEIGHT = 24;
+            const BASE_MAX_HEIGHT = 44;       // reduced from 50
+
             let spawnTimer = 0;
-            const BASE_SPAWN_DELAY = 75;       // frames at 60fps between spawns (decreases with speed)
+            const BASE_SPAWN_DELAY = 70;
 
-            // Particles (death effect)
             let particles = [];
-
-            // Screen flash effect
             let flashAlpha = 0;
-
-            // Background stars
             let stars = [];
             const STAR_COUNT = 60;
 
-            // Local storage high score
             try {
-                const saved = localStorage.getItem('neonDashHighScore');
+                const saved = localStorage.getItem('neonDash2HighScore');
                 if (saved) highScore = parseInt(saved, 10) || 0;
-            } catch (e) { /* ignore */ }
+            } catch (e) {}
 
-            // ---------- Helper: delta time ----------
-            let lastTimestamp = 0;
             function deltaFactor(dt) {
-                // dt in seconds, reference 16.67ms per frame (60fps)
                 return dt / (1 / 60);
             }
 
-            // ---------- Reset game ----------
+            // Calculate the maximum obstacle height that is always jumpable
+            // at the current speed. Uses the player's jump physics to leave a safety margin.
+            function getMaxClearableHeight(currentSpeed) {
+                // Jump peak height (from ground) = v0^2 / (2*g)
+                const peak = (JUMP_VELOCITY * JUMP_VELOCITY) / (2 * GRAVITY);
+                // The time in frames the obstacle overlaps the player:
+                const totalWidth = PLAYER_WIDTH + OBSTACLE_WIDTH;
+                const overlapFrames = totalWidth / currentSpeed;
+                // The height the player can reach in half the overlap time (to be safe)
+                // We'll just use a generous fraction of the peak height and subtract some.
+                // More speed → less time to rise → effectively lower safe height.
+                const safetyFactor = Math.max(0.55, 1.0 - currentSpeed * 0.03);
+                return Math.floor(peak * safetyFactor - 4);
+            }
+
             function resetGame() {
                 player.y = GROUND_Y - PLAYER_HEIGHT;
                 player.vy = 0;
                 player.grounded = true;
+                player.doubleJumpAvailable = true;
                 obstacles = [];
                 particles = [];
                 flashAlpha = 0;
@@ -124,9 +132,12 @@
                 gameState = STATE.PLAYING;
             }
 
-            // ---------- Spawn obstacle ----------
             function spawnObstacle() {
-                const height = OBSTACLE_MIN_HEIGHT + Math.random() * (OBSTACLE_MAX_HEIGHT - OBSTACLE_MIN_HEIGHT);
+                const maxClearable = getMaxClearableHeight(speed);
+                // Use a dynamic max that never exceeds the clearable height, with a floor.
+                const maxH = Math.max(BASE_MIN_HEIGHT, Math.min(BASE_MAX_HEIGHT, maxClearable));
+                const minH = Math.min(BASE_MIN_HEIGHT, maxH - 8);
+                const height = minH + Math.random() * (maxH - minH);
                 obstacles.push({
                     x: W,
                     y: GROUND_Y - height,
@@ -136,7 +147,6 @@
                 });
             }
 
-            // ---------- Create death particles ----------
             function createDeathParticles() {
                 const count = 14;
                 const cx = player.x + player.width / 2;
@@ -158,7 +168,6 @@
                 flashAlpha = 0.5;
             }
 
-            // ---------- Initialize stars ----------
             function initStars() {
                 stars = [];
                 for (let i = 0; i < STAR_COUNT; i++) {
@@ -172,13 +181,11 @@
             }
             initStars();
 
-            // ---------- Update game ----------
             function update(dtSec) {
                 const factor = deltaFactor(dtSec);
-                // Cap factor to avoid huge jumps when tab inactive
                 const cappedFactor = Math.min(factor, 3.0);
 
-                // Update stars (parallax background)
+                // Update background stars
                 for (let s of stars) {
                     s.x -= s.speed * cappedFactor * 0.4;
                     if (s.x < -5) {
@@ -188,7 +195,6 @@
                 }
 
                 if (gameState !== STATE.PLAYING) {
-                    // Still update particles and flash even on gameover screen
                     for (let i = particles.length - 1; i >= 0; i--) {
                         const p = particles[i];
                         p.x += p.vx * cappedFactor;
@@ -200,68 +206,64 @@
                     return;
                 }
 
-                // ----- Player physics -----
+                // Player physics
                 player.vy += GRAVITY * cappedFactor;
                 player.y += player.vy * cappedFactor;
 
-                // Ground collision
+                // Ground check
                 if (player.y + player.height >= GROUND_Y) {
                     player.y = GROUND_Y - player.height;
                     player.vy = 0;
                     player.grounded = true;
+                    player.doubleJumpAvailable = true;
                 } else {
                     player.grounded = false;
                 }
 
-                // ----- Spawn obstacles -----
-                const currentSpawnDelay = Math.max(22, BASE_SPAWN_DELAY - speed * 3.5);
+                // Spawn obstacles
+                const currentSpawnDelay = Math.max(28, BASE_SPAWN_DELAY - speed * 3.2);
                 spawnTimer += cappedFactor;
                 if (spawnTimer >= currentSpawnDelay) {
                     spawnTimer = 0;
                     spawnObstacle();
                 }
 
-                // ----- Move obstacles & collision -----
+                // Move obstacles & collision
                 for (let i = obstacles.length - 1; i >= 0; i--) {
                     const obs = obstacles[i];
                     obs.x -= speed * cappedFactor;
 
-                    // Score counting (pass player)
                     if (!obs.counted && obs.x + obs.width < player.x) {
                         obs.counted = true;
                         score++;
-                        // Increase speed gradually
                         speed = Math.min(MAX_SPEED, 5 + score * SPEED_INCREASE_PER_SCORE);
                     }
 
-                    // Remove if off screen
                     if (obs.x + obs.width < -10) {
                         obstacles.splice(i, 1);
                         continue;
                     }
 
-                    // AABB collision with player
+                    // Collision
                     if (
                         player.x < obs.x + obs.width &&
                         player.x + player.width > obs.x &&
                         player.y < obs.y + obs.height &&
                         player.y + player.height > obs.y
                     ) {
-                        // Game over
                         gameState = STATE.GAMEOVER;
                         createDeathParticles();
-                        // Update high score
                         if (score > highScore) {
                             highScore = score;
                             try {
-                                localStorage.setItem('neonDashHighScore', highScore);
-                            } catch (e) { /* ignore */ }
+                                localStorage.setItem('neonDash2HighScore', highScore);
+                            } catch (e) {}
                         }
-                        break; // stop checking further collisions
+                        break;
                     }
                 }
 
-                // ----- Update particles & flash -----
+                // Particles & flash
                 for (let i = particles.length - 1; i >= 0; i--) {
                     const p = particles[i];
                     p.x += p.vx * cappedFactor;
@@ -272,18 +274,16 @@
                 flashAlpha = Math.max(0, flashAlpha - 0.04 * cappedFactor);
             }
 
-            // ---------- Draw ----------
             function draw() {
                 ctx.clearRect(0, 0, W, H);
 
-                // Background gradient
                 const bgGrad = ctx.createLinearGradient(0, 0, 0, H);
                 bgGrad.addColorStop(0, '#0a0a14');
                 bgGrad.addColorStop(0.7, '#111122');
                 ctx.fillStyle = bgGrad;
                 ctx.fillRect(0, 0, W, H);
 
-                // Draw stars
+                // Stars
                 ctx.shadowColor = '#ffffff';
                 ctx.shadowBlur = 4;
                 ctx.fillStyle = '#ffffff';
@@ -295,7 +295,7 @@
                 ctx.shadowBlur = 0;
                 ctx.shadowColor = 'transparent';
 
-                // Ground line
+                // Ground
                 ctx.beginPath();
                 ctx.strokeStyle = '#00ffff';
                 ctx.lineWidth = 2;
@@ -306,23 +306,31 @@
                 ctx.stroke();
                 ctx.shadowBlur = 0;
                 ctx.shadowColor = 'transparent';
-                ctx.lineWidth = 1;
 
-                // Obstacles (glowing rectangles)
+                // Obstacles
                 for (let obs of obstacles) {
                     ctx.fillStyle = '#ff00ff';
                     ctx.shadowColor = '#ff00ff';
                     ctx.shadowBlur = 14;
                     ctx.fillRect(obs.x, obs.y, obs.width, obs.height);
                 }
-                ctx.shadowBlur = 0;
-                ctx.shadowColor = 'transparent';
 
-                // Player (glowing cyan square)
+                // Player
                 ctx.fillStyle = '#00ffff';
                 ctx.shadowColor = '#00ffff';
                 ctx.shadowBlur = 18;
                 ctx.fillRect(player.x, player.y, player.width, player.height);
+
+                // Double jump indicator – tiny cyan dot above player when available
+                if (!player.grounded && player.doubleJumpAvailable) {
+                    ctx.fillStyle = '#ffffff';
+                    ctx.shadowColor = '#ffffff';
+                    ctx.shadowBlur = 8;
+                    ctx.beginPath();
+                    ctx.arc(player.x + player.width/2, player.y - 8, 3, 0, Math.PI*2);
+                    ctx.fill();
+                }
+
                 ctx.shadowBlur = 0;
                 ctx.shadowColor = 'transparent';
 
@@ -338,13 +346,13 @@
                 ctx.shadowBlur = 0;
                 ctx.shadowColor = 'transparent';
 
-                // Screen flash overlay
+                // Flash
                 if (flashAlpha > 0.01) {
                     ctx.fillStyle = `rgba(255, 255, 255, ${flashAlpha})`;
                     ctx.fillRect(0, 0, W, H);
                 }
 
-                // UI text
+                // UI
                 ctx.font = 'bold 20px "Courier New", monospace';
                 ctx.textAlign = 'center';
                 ctx.shadowColor = '#00ffff';
@@ -352,11 +360,11 @@
                 ctx.fillStyle = '#ffffff';
 
                 if (gameState === STATE.START) {
-                    ctx.fillText('NEON DASH', W / 2, H / 2 - 30);
+                    ctx.fillText('NEON DASH 2', W / 2, H / 2 - 35);
                     ctx.font = '13px "Courier New", monospace';
-                    ctx.fillText('TAP OR PRESS SPACE', W / 2, H / 2 + 15);
+                    ctx.fillText('TAP OR SPACE TO JUMP', W / 2, H / 2 + 5);
+                    ctx.fillText('DOUBLE TAP FOR EXTRA JUMP', W / 2, H / 2 + 25);
                 } else if (gameState === STATE.PLAYING) {
-                    ctx.font = 'bold 20px "Courier New", monospace';
                     ctx.fillText(score, W / 2, 50);
                 } else if (gameState === STATE.GAMEOVER) {
                     ctx.fillText('GAME OVER', W / 2, H / 2 - 35);
@@ -366,26 +374,23 @@
                     ctx.font = '12px "Courier New", monospace';
                     ctx.fillText('TAP TO RESTART', W / 2, H / 2 + 55);
                 }
-
                 ctx.shadowBlur = 0;
                 ctx.shadowColor = 'transparent';
                 ctx.textAlign = 'left';
             }
 
-            // ---------- Game loop ----------
             function gameLoop(timestamp) {
                 if (!lastTimestamp) lastTimestamp = timestamp;
                 let dtSec = (timestamp - lastTimestamp) / 1000;
-                if (dtSec <= 0) dtSec = 0.016; // fallback
+                if (dtSec <= 0) dtSec = 0.016;
                 lastTimestamp = timestamp;
 
                 update(dtSec);
                 draw();
-
                 requestAnimationFrame(gameLoop);
             }
+            let lastTimestamp = 0;
 
-            // ---------- Input handling ----------
             function handleJump() {
                 if (gameState === STATE.START) {
                     resetGame();
@@ -393,13 +398,30 @@
                     if (player.grounded) {
                         player.vy = JUMP_VELOCITY;
                         player.grounded = false;
+                        player.doubleJumpAvailable = true;   // reset for new jump sequence
+                    } else if (player.doubleJumpAvailable) {
+                        // Double jump!
+                        player.vy = DOUBLE_JUMP_VELOCITY;
+                        player.doubleJumpAvailable = false;
+                        // small burst of particles
+                        for (let i=0; i<6; i++) {
+                            particles.push({
+                                x: player.x + player.width/2,
+                                y: player.y + player.height,
+                                vx: (Math.random() - 0.5) * 3,
+                                vy: -2 - Math.random() * 3,
+                                life: 0.7,
+                                decay: 0.05,
+                                size: 2 + Math.random()*3,
+                                color: '#ffffff'
+                            });
+                        }
                     }
                 } else if (gameState === STATE.GAMEOVER) {
                     resetGame();
                 }
             }
 
-            // Keyboard
             document.addEventListener('keydown', function(e) {
                 if (e.code === 'Space' || e.key === ' ') {
                     e.preventDefault();
@@ -407,24 +429,20 @@
                 }
             });
 
-            // Mouse
             canvas.addEventListener('mousedown', function(e) {
                 e.preventDefault();
                 handleJump();
             });
 
-            // Touch
             canvas.addEventListener('touchstart', function(e) {
                 e.preventDefault();
                 handleJump();
             }, { passive: false });
 
-            // Prevent scrolling on canvas touchmove
             canvas.addEventListener('touchmove', function(e) {
                 e.preventDefault();
             }, { passive: false });
 
-            // Start the loop
             requestAnimationFrame(gameLoop);
         })();
     </script>
