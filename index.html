@@ -3,9 +3,9 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>Neon Gauntlet – Shop & Boss</title>
+    <title>Neon Gauntlet – Shop, Boss & Avatar</title>
     <style>
-        * { margin: 0; padding: 0; box-sizing: border-box; }
+        * { margin:0; padding:0; box-sizing:border-box; }
         body {
             background: #050510;
             display: flex;
@@ -22,208 +22,222 @@
             max-width: 900px;
             height: auto;
             border: 1px solid #333;
-            box-shadow: 0 0 40px rgba(0, 255, 255, 0.3);
+            box-shadow: 0 0 40px rgba(0,255,255,0.3);
             border-radius: 6px;
             cursor: pointer;
             image-rendering: crisp-edges;
         }
         .info {
-            position: absolute;
-            bottom: 10px;
-            color: #555;
-            font-size: 12px;
-            text-align: center;
-            width: 100%;
-            pointer-events: none;
+            position: absolute; bottom: 10px; color: #555; font-size:12px; text-align:center; width:100%; pointer-events:none;
         }
     </style>
 </head>
 <body>
     <canvas id="gameCanvas" width="480" height="320"></canvas>
-    <div class="info">TAP / SPACE TO JUMP (DOUBLE TAP FOR AIR JUMP)</div>
+    <div class="info">TAP / SPACE = JUMP (DOUBLE TAP FOR AIR JUMP)</div>
 
     <script>
         (function() {
             const canvas = document.getElementById('gameCanvas');
             const ctx = canvas.getContext('2d');
-            const W = canvas.width, H = canvas.height;
+            const W = 480, H = 320;
             const GROUND_Y = H - 40;
             const PLAYER_W = 22, PLAYER_H = 22;
             const PLAYER_X = 70;
 
-            // --- Game states ---
-            const STATE = { MENU: 'menu', PLAYING: 'playing', SHOP: 'shop', BOSS: 'boss', GAMEOVER: 'gameover' };
+            // ---------------- States ----------------
+            const STATE = { MENU:'menu', PLAYING:'playing', SHOP:'shop', BOSS:'boss', GAMEOVER:'gameover' };
             let gameState = STATE.MENU;
 
-            // --- Player persistent data ---
+            // ---------------- Persistent Data ----------------
             let playerCoins = 0;
-            let unlockedAbilities = [];            // array of ability keys
-            let equippedAbility = null;            // currently equipped ability key
-            let abilitySlots = 1;                  // max abilities you can equip (starts at 1)
-            let bossDefeated = false;              // true after beating boss once (permanent)
+            let unlockedAbilities = [];
+            let equippedAbilities = [];        // up to abilitySlots
+            let abilitySlots = 1;
+            let bossDefeated = false;
             let highScore = 0;
+            let leaderboard = [];
+
+            const SAVE_KEY = 'neonGauntletV2';
+            const LEADERBOARD_KEY = 'neonGauntletLeaderboard';
 
             // Abilities definition
             const ABILITIES = {
-                shield: { name: 'Shield', desc: 'Start with 1 hit shield', cost: 30, color: '#00ccff' },
-                slowTime: { name: 'Slow Time', desc: 'Speed reduced by 25%', cost: 50, color: '#ffaa00' },
-                coinMagnet: { name: 'Coin Magnet', desc: 'Attract coins from afar', cost: 20, color: '#ffdd44' },
-                doubleScore: { name: 'Double Score', desc: 'Earn 2x points', cost: 40, color: '#ff44ff' },
-                tripleJump: { name: 'Triple Jump', desc: 'One extra mid‑air jump', cost: 60, color: '#ff2222' }
+                shield:    { name:'Shield',       desc:'Start with 1 hit shield',   cost:30, color:'#00ccff' },
+                slowTime:  { name:'Slow Time',    desc:'Speed reduced by 25%',       cost:50, color:'#ffaa00' },
+                coinMagnet:{ name:'Coin Magnet',  desc:'Attract coins from afar',    cost:20, color:'#ffdd44' },
+                doubleScore:{ name:'Double Score',desc:'Earn 2x points',             cost:40, color:'#ff44ff' },
+                tripleJump:{ name:'Triple Jump',  desc:'One extra mid‑air jump',     cost:60, color:'#ff2222' }
             };
 
-            // --- Current run variables ---
+            // Avatar thresholds based on high score
+            const AVATARS = [
+                { min:0,   shape:'square',  color:'#00ffff', glow:'#00ffff', name:'Rookie' },
+                { min:10,  shape:'diamond', color:'#ff44ff', glow:'#ff44ff', name:'Dasher' },
+                { min:25,  shape:'circle',  color:'#ffaa00', glow:'#ffaa00', name:'Runner' },
+                { min:50,  shape:'star',    color:'#00ff44', glow:'#00ff44', name:'Elite' },
+                { min:100, shape:'hexagon', color:'#ffd700', glow:'#ffd700', name:'Legend' }
+            ];
+
+            // ---------------- Run Variables ----------------
             let score = 0;
             let runCoins = 0;
-            let speed = 5;
-            let baseSpeed = 5;
+            let speed = 5, baseSpeed = 5;
             let level = 1;
             const SCORE_PER_LEVEL = 15;
             let scoreThisLevel = 0;
-            const MAX_SPEED_BASE = 14;
-            const SPEED_INCREASE_PER_SCORE = 0.01;
+            const SPEED_INC_PER_SCORE = 0.01;
             const LEVEL_SPEED_BOOST = 1.1;
 
-            // Player physics
-            let player = { x: PLAYER_X, y: GROUND_Y - PLAYER_H, width: PLAYER_W, height: PLAYER_H, vy: 0, grounded: true, doubleJumpAvailable: true };
-            const GRAVITY = 0.55;
-            const JUMP_VEL = -9.2;
-            const DOUBLE_JUMP_VEL = -6.5;
-            let extraJumpsRemaining = 0; // for triple jump ability
-            let shieldRemaining = 0;      // for shield ability
+            let player = {
+                x: PLAYER_X, y: GROUND_Y - PLAYER_H,
+                width: PLAYER_W, height: PLAYER_H,
+                vy:0, grounded:true, doubleJumpAvailable:true,
+                extraJumps:0, shield:0
+            };
+            const GRAVITY = 0.55, JUMP_VEL = -9.2, DOUBLE_JUMP_VEL = -6.5;
 
-            // Objects
-            let obstacles = [];
-            let coins = [];                // visual coin pickups
+            let obstacles = [], coins = [];
             const OBS_W = 20, OBS_MIN_H = 24, OBS_MAX_H = 44;
             const COIN_SIZE = 12;
-            let spawnTimer = 0, coinSpawnTimer = 0;
-            const BASE_SPAWN_DELAY = 70;
-            const COIN_SPAWN_DELAY = 90;
+            let spawnTimer=0, coinSpawnTimer=0;
+            const BASE_SPAWN_DELAY = 70, COIN_SPAWN_DELAY = 90;
 
-            // Boss level data
-            let bossObstacles = [];        // predefined obstacle array for boss
-            let bossProgress = 0;          // current index in bossObstacles
+            // Boss data
+            let bossObstacles = [];
+            let bossProgress = 0;
             let bossSpeed = 7;
             const BOSS_ENTRY_FEE = 30;
-            const BOSS_OBSTACLE_COUNT = 60; // length of boss level
+            const BOSS_TOTAL = 60; // 60 obstacles to beat
 
             // Effects
-            let particles = [], flashAlpha = 0, shakeAmount = 0;
-            let speedLines = [], stars = [];
+            let particles=[], flashAlpha=0, shakeAmount=0;
+            let speedLines=[], stars=[];
             const STAR_COUNT = 50;
 
             // Themes (8 levels)
             const themes = [
-                { bg: ['#0a0a14', '#111122'], ground: '#00ffff', obs: '#ff00ff', stars: '#ffffff' },
-                { bg: ['#140a0a', '#221111'], ground: '#ffaa00', obs: '#ff4400', stars: '#ff8844' },
-                { bg: ['#0a141a', '#0a1f2b'], ground: '#00ccff', obs: '#0088ff', stars: '#88ddff' },
-                { bg: ['#0a140a', '#112211'], ground: '#00ff44', obs: '#44ff00', stars: '#88ff44' },
-                { bg: ['#140a14', '#221122'], ground: '#ff44ff', obs: '#ff00aa', stars: '#ffaaff' },
-                { bg: ['#0a0a14', '#1a1a2e'], ground: '#ffd700', obs: '#ffaa00', stars: '#ffe066' },
-                { bg: ['#140a0a', '#0a1414'], ground: '#ff3333', obs: '#33ccff', stars: '#ff9966' },
-                { bg: ['#1a0a1a', '#2a0a2a'], ground: '#ffcc00', obs: '#ff0066', stars: '#ff6699' }
+                { bg:['#0a0a14','#111122'], ground:'#00ffff', obs:'#ff00ff', stars:'#ffffff' },
+                { bg:['#140a0a','#221111'], ground:'#ffaa00', obs:'#ff4400', stars:'#ff8844' },
+                { bg:['#0a141a','#0a1f2b'], ground:'#00ccff', obs:'#0088ff', stars:'#88ddff' },
+                { bg:['#0a140a','#112211'], ground:'#00ff44', obs:'#44ff00', stars:'#88ff44' },
+                { bg:['#140a14','#221122'], ground:'#ff44ff', obs:'#ff00aa', stars:'#ffaaff' },
+                { bg:['#0a0a14','#1a1a2e'], ground:'#ffd700', obs:'#ffaa00', stars:'#ffe066' },
+                { bg:['#140a0a','#0a1414'], ground:'#ff3333', obs:'#33ccff', stars:'#ff9966' },
+                { bg:['#1a0a1a','#2a0a2a'], ground:'#ffcc00', obs:'#ff0066', stars:'#ff6699' }
             ];
             let currentTheme = themes[0];
 
-            // Button definitions (for mouse/touch)
+            // Buttons on UI
             let buttons = [];
 
-            // --- Local storage ---
-            const SAVE_KEY = 'neonGauntletSave';
+            // ---------------- Save/Load ----------------
             function loadData() {
                 try {
-                    const data = JSON.parse(localStorage.getItem(SAVE_KEY));
-                    if (data) {
-                        playerCoins = data.coins || 0;
-                        unlockedAbilities = data.unlocked || [];
-                        equippedAbility = data.equipped || null;
-                        abilitySlots = data.slots || 1;
-                        bossDefeated = data.boss || false;
-                        highScore = data.highScore || 0;
+                    const d = JSON.parse(localStorage.getItem(SAVE_KEY));
+                    if (d) {
+                        playerCoins = d.coins || 0;
+                        unlockedAbilities = d.unlocked || [];
+                        equippedAbilities = d.equipped || [];
+                        abilitySlots = d.slots || 1;
+                        bossDefeated = d.boss || false;
+                        highScore = d.highScore || 0;
                     }
-                } catch(e) { resetData(); }
-                if (!abilitySlots) abilitySlots = 1;
+                } catch(e) { resetAll(); }
+                if (abilitySlots < 1) abilitySlots = 1;
+                if (equippedAbilities.length > abilitySlots) equippedAbilities = equippedAbilities.slice(0, abilitySlots);
             }
             function saveData() {
                 try {
                     localStorage.setItem(SAVE_KEY, JSON.stringify({
-                        coins: playerCoins, unlocked: unlockedAbilities,
-                        equipped: equippedAbility, slots: abilitySlots,
-                        boss: bossDefeated, highScore: highScore
+                        coins:playerCoins, unlocked:unlockedAbilities,
+                        equipped:equippedAbilities, slots:abilitySlots,
+                        boss:bossDefeated, highScore:highScore
                     }));
                 } catch(e) {}
             }
-            function resetData() {
-                playerCoins = 0; unlockedAbilities = []; equippedAbility = null;
-                abilitySlots = 1; bossDefeated = false; highScore = 0;
+            function resetAll() {
+                playerCoins=0; unlockedAbilities=[]; equippedAbilities=[]; abilitySlots=1;
+                bossDefeated=false; highScore=0;
                 saveData();
             }
 
-            function resetRun() {
-                player.y = GROUND_Y - PLAYER_H; player.vy = 0; player.grounded = true;
-                player.doubleJumpAvailable = true; extraJumpsRemaining = 0; shieldRemaining = 0;
-                obstacles = []; coins = []; particles = []; speedLines = [];
-                flashAlpha = 0; shakeAmount = 0; spawnTimer = 0; coinSpawnTimer = 0;
-                score = 0; runCoins = 0; scoreThisLevel = 0; level = 1;
-                baseSpeed = 5; speed = 5; currentTheme = themes[0];
-                // Apply equipped ability effects for this run
-                if (equippedAbility === 'shield') shieldRemaining = 1;
-                if (equippedAbility === 'slowTime') speed *= 0.75; // immediately slow
-                if (equippedAbility === 'tripleJump') extraJumpsRemaining = 1;
+            // Leaderboard
+            function loadLeaderboard() {
+                try {
+                    const d = JSON.parse(localStorage.getItem(LEADERBOARD_KEY));
+                    if (d) leaderboard = d;
+                    else leaderboard = [];
+                } catch(e) { leaderboard = []; }
+            }
+            function saveLeaderboard(score) {
+                leaderboard.push(score);
+                leaderboard.sort((a,b)=>b-a);
+                if (leaderboard.length > 10) leaderboard.pop();
+                localStorage.setItem(LEADERBOARD_KEY, JSON.stringify(leaderboard));
+                highScore = Math.max(...leaderboard);
             }
 
-            // --- Boss level generation ---
-            function generateBossLevel() {
-                bossObstacles = [];
-                let lastX = W + 100;
-                for (let i = 0; i < BOSS_OBSTACLE_COUNT; i++) {
-                    const gap = 90 - i * 0.5; // gets tighter
-                    const minGap = Math.max(50, gap);
-                    const x = lastX + minGap + Math.random() * 30;
-                    const maxH = getMaxClearableHeight(bossSpeed);
-                    const height = 30 + Math.random() * (maxH - 30);
-                    bossObstacles.push({ x, y: GROUND_Y - height, width: OBS_W, height, counted: false });
-                    lastX = x;
+            // Avatar from high score
+            function getAvatar() {
+                for (let i=AVATARS.length-1; i>=0; i--) {
+                    if (highScore >= AVATARS[i].min) return AVATARS[i];
                 }
-                bossProgress = 0;
-                bossSpeed = 6.5;
+                return AVATARS[0];
             }
 
-            function startBossLevel() {
-                if (playerCoins < BOSS_ENTRY_FEE) return false;
-                playerCoins -= BOSS_ENTRY_FEE;
-                saveData();
-                generateBossLevel();
-                player.y = GROUND_Y - PLAYER_H; player.vy = 0; player.grounded = true;
-                player.doubleJumpAvailable = true; extraJumpsRemaining = 0; shieldRemaining = 0;
-                if (equippedAbility === 'shield') shieldRemaining = 1;
-                if (equippedAbility === 'tripleJump') extraJumpsRemaining = 1;
-                gameState = STATE.BOSS;
-                return true;
+            // ---------------- Run functions ----------------
+            function resetRun() {
+                player.y = GROUND_Y - PLAYER_H;
+                player.vy = 0;
+                player.grounded = true;
+                player.doubleJumpAvailable = true;
+                player.extraJumps = 0;
+                player.shield = 0;
+                obstacles = []; coins = []; particles = []; speedLines = [];
+                flashAlpha = 0; shakeAmount = 0;
+                spawnTimer = 0; coinSpawnTimer = 0;
+                score = 0; runCoins = 0; scoreThisLevel = 0; level = 1;
+                baseSpeed = 5; speed = 5;
+                currentTheme = themes[0];
+
+                // Apply equipped abilities
+                for (let ab of equippedAbilities) {
+                    if (ab === 'shield') player.shield += 1;
+                    if (ab === 'tripleJump') player.extraJumps += 1;
+                }
+                if (equippedAbilities.includes('slowTime')) speed *= 0.75;
             }
 
-            function getMaxClearableHeight(speed) {
+            function getMaxClearableHeight(spd) {
                 const peak = (JUMP_VEL * JUMP_VEL) / (2 * GRAVITY);
-                const safety = Math.max(0.4, 1.0 - speed * 0.035);
+                const safety = Math.max(0.4, 1.0 - spd * 0.035);
                 return Math.floor(peak * safety - 4);
+            }
+
+            function spawnObstacle() {
+                const maxH = getMaxClearableHeight(speed);
+                const h = 24 + Math.random() * (maxH - 24);
+                obstacles.push({ x:W, y:GROUND_Y-h, width:OBS_W, height:h, counted:false });
+            }
+            function spawnCoin() {
+                coins.push({ x:W, y:GROUND_Y-50-Math.random()*30, width:COIN_SIZE, height:COIN_SIZE, collected:false });
             }
 
             function advanceLevel() {
                 level++;
-                baseSpeed = Math.min(level * 1.2 + 3.8, 25);
+                baseSpeed = Math.min(level*1.2+3.8, 25);
                 speed = baseSpeed;
-                if (equippedAbility === 'slowTime') speed *= 0.75;
+                if (equippedAbilities.includes('slowTime')) speed *= 0.75;
                 scoreThisLevel = 0;
-                const idx = (level - 1) % themes.length;
-                currentTheme = themes[idx];
+                currentTheme = themes[(level-1)%themes.length];
                 shakeAmount = 6;
-                for (let i = 0; i < 15; i++) {
+                for (let i=0; i<15; i++) {
                     particles.push({
-                        x: W/2 + (Math.random()-0.5)*100, y: H/2-30,
-                        vx: (Math.random()-0.5)*5, vy: -Math.random()*4,
-                        life: 1, decay: 0.03, size: 4+Math.random()*4,
-                        color: currentTheme.ground
+                        x:W/2+(Math.random()-0.5)*100, y:H/2-30,
+                        vx:(Math.random()-0.5)*5, vy:-Math.random()*4,
+                        life:1, decay:0.03, size:4+Math.random()*4,
+                        color:currentTheme.ground
                     });
                 }
             }
@@ -236,15 +250,18 @@
                 }
                 gameState = STATE.GAMEOVER;
                 playerCoins += runCoins;
-                if (score > highScore) highScore = score;
+                if (score > highScore) {
+                    highScore = score;
+                    saveLeaderboard(score);
+                }
                 saveData();
                 // death particles
                 for (let i=0; i<20; i++) {
                     particles.push({
-                        x: player.x+player.width/2, y: player.y+player.height/2,
-                        vx: (Math.random()-0.5)*8, vy: -Math.random()*6,
-                        life: 1, decay: 0.02, size: 3+Math.random()*5,
-                        color: currentTheme.obs
+                        x:player.x+player.width/2, y:player.y+player.height/2,
+                        vx:(Math.random()-0.5)*8, vy:-Math.random()*6,
+                        life:1, decay:0.02, size:3+Math.random()*5,
+                        color:currentTheme.obs
                     });
                 }
                 flashAlpha = 0.6;
@@ -258,18 +275,151 @@
                 gameState = STATE.MENU;
                 for (let i=0; i<30; i++) {
                     particles.push({
-                        x: W/2, y: H/2, vx: (Math.random()-0.5)*10, vy: -Math.random()*8,
-                        life: 1, decay: 0.015, size: 5+Math.random()*6,
-                        color: '#ffd700'
+                        x:W/2, y:H/2, vx:(Math.random()-0.5)*10, vy:-Math.random()*8,
+                        life:1, decay:0.015, size:5+Math.random()*6,
+                        color:'#ffd700'
                     });
                 }
             }
 
-            // --- Update helpers ---
-            function moveObjects(arr, spd, factor) {
-                for (let i=arr.length-1; i>=0; i--) {
-                    arr[i].x -= spd * factor;
-                    if (arr[i].x + arr[i].width < -20) arr.splice(i,1);
+            // Boss level generation
+            function generateBossLevel() {
+                bossObstacles = [];
+                let lastX = W + 100;
+                for (let i=0; i<BOSS_TOTAL; i++) {
+                    const gap = Math.max(40, 90 - i*0.5);
+                    const x = lastX + gap + Math.random()*20;
+                    const maxH = getMaxClearableHeight(bossSpeed);
+                    const h = 30 + Math.random()*(maxH-30);
+                    bossObstacles.push({ x, y:GROUND_Y-h, width:OBS_W, height:h, counted:false });
+                    lastX = x;
+                }
+                bossProgress = 0;
+                bossSpeed = 6.5;
+            }
+            function startBoss() {
+                if (playerCoins < BOSS_ENTRY_FEE) return false;
+                playerCoins -= BOSS_ENTRY_FEE;
+                saveData();
+                generateBossLevel();
+                player.y = GROUND_Y-PLAYER_H; player.vy=0; player.grounded=true;
+                player.doubleJumpAvailable = true;
+                player.extraJumps = equippedAbilities.includes('tripleJump') ? 1 : 0;
+                player.shield = equippedAbilities.includes('shield') ? 1 : 0;
+                gameState = STATE.BOSS;
+                return true;
+            }
+
+            // ---------------- Update ----------------
+            function update(dtSec) {
+                const factor = Math.min(dtSec/(1/60), 3.0);
+                // stars
+                for (let s of stars) {
+                    s.x -= s.speed * factor * 0.5;
+                    if (s.x < -5) { s.x = W+5; s.y = Math.random()*(GROUND_Y-10); }
+                }
+                // particles
+                for (let i=particles.length-1; i>=0; i--) {
+                    let p = particles[i];
+                    p.x += p.vx * factor; p.y += p.vy * factor;
+                    p.life -= p.decay * factor;
+                    if (p.life <= 0) particles.splice(i,1);
+                }
+                flashAlpha = Math.max(0, flashAlpha - 0.04*factor);
+                shakeAmount = Math.max(0, shakeAmount - 0.6*factor);
+
+                if (gameState === STATE.PLAYING || gameState === STATE.BOSS) {
+                    const isBoss = gameState === STATE.BOSS;
+                    const spd = isBoss ? bossSpeed : speed;
+
+                    // player physics
+                    player.vy += GRAVITY * factor;
+                    player.y += player.vy * factor;
+                    if (player.y + player.height >= GROUND_Y) {
+                        player.y = GROUND_Y - player.height; player.vy=0; player.grounded=true;
+                        player.doubleJumpAvailable = true;
+                        if (equippedAbilities.includes('tripleJump')) player.extraJumps = 1;
+                    } else player.grounded = false;
+
+                    // speed lines
+                    if (spd > 6 && Math.random() < 0.3 * factor) {
+                        speedLines.push({ x:Math.random()*W, y:Math.random()*GROUND_Y, length:20+Math.random()*60, life:1, decay:0.02+spd*0.005 });
+                    }
+                    for (let i=speedLines.length-1; i>=0; i--) {
+                        let l = speedLines[i];
+                        l.x -= spd * 1.2 * factor; l.life -= l.decay * factor;
+                        if (l.life <= 0 || l.x+l.length < -20) speedLines.splice(i,1);
+                    }
+
+                    if (!isBoss) {
+                        // obstacles
+                        const delay = Math.max(26, BASE_SPAWN_DELAY - spd*3.3);
+                        spawnTimer += factor;
+                        if (spawnTimer >= delay) { spawnTimer=0; spawnObstacle(); }
+                        coinSpawnTimer += factor;
+                        if (coinSpawnTimer >= COIN_SPAWN_DELAY) { coinSpawnTimer=0; if (Math.random()<0.6) spawnCoin(); }
+                        // move
+                        for (let o of obstacles) o.x -= spd * factor;
+                        for (let c of coins) c.x -= spd * factor;
+                        obstacles = obstacles.filter(o => o.x+o.width > -20);
+                        coins = coins.filter(c => c.x+c.width > -20);
+
+                        // scoring & coin magnet
+                        let magnetRange = equippedAbilities.includes('coinMagnet') ? 40 : 12;
+                        for (let i=coins.length-1; i>=0; i--) {
+                            let c = coins[i];
+                            if (!c.collected) {
+                                let dx = (player.x+player.width/2) - (c.x+c.width/2);
+                                let dy = (player.y+player.height/2) - (c.y+c.height/2);
+                                if (Math.sqrt(dx*dx+dy*dy) < magnetRange) {
+                                    c.collected = true; runCoins++; coins.splice(i,1);
+                                }
+                            }
+                        }
+
+                        // obstacle scoring & collision
+                        for (let o of obstacles) {
+                            if (!o.counted && o.x+o.width < player.x) {
+                                o.counted = true;
+                                let points = 1;
+                                if (equippedAbilities.includes('doubleScore')) points *= 2;
+                                score += points; runCoins += 1; scoreThisLevel += 1;
+                                const maxSpeed = baseSpeed + (LEVEL_SPEED_BOOST*(level-1));
+                                speed = Math.min(maxSpeed, baseSpeed + scoreThisLevel*SPEED_INC_PER_SCORE);
+                                if (equippedAbilities.includes('slowTime')) speed *= 0.75;
+                                if (scoreThisLevel >= SCORE_PER_LEVEL) advanceLevel();
+                            }
+                            if (checkCollision(player.x,player.y,player.width,player.height, o.x,o.y,o.width,o.height)) {
+                                if (player.shield > 0) {
+                                    player.shield--; obstacles.splice(obstacles.indexOf(o),1); flashAlpha=0.4; continue;
+                                }
+                                die(); return;
+                            }
+                        }
+                    } else { // boss mode
+                        // move boss obstacles
+                        for (let o of bossObstacles) o.x -= spd * factor;
+                        bossObstacles = bossObstacles.filter(o => o.x+o.width > -20);
+                        // collision
+                        for (let o of bossObstacles) {
+                            if (checkCollision(player.x,player.y,player.width,player.height, o.x,o.y,o.width,o.height)) {
+                                if (player.shield > 0) {
+                                    player.shield--; bossObstacles.splice(bossObstacles.indexOf(o),1); flashAlpha=0.5; continue;
+                                }
+                                die(); return;
+                            }
+                        }
+                        bossProgress = BOSS_TOTAL - bossObstacles.length;
+                        if (bossProgress >= BOSS_TOTAL) { winBoss(); return; }
+                        // keep obstacles flowing
+                        if (bossObstacles.length < 5) {
+                            let lastX = bossObstacles.length>0 ? bossObstacles[bossObstacles.length-1].x : W+100;
+                            let gap = Math.max(30, 90 - bossProgress*0.4);
+                            let maxH = getMaxClearableHeight(bossSpeed);
+                            let h = 24 + Math.random()*(maxH-24);
+                            bossObstacles.push({ x:lastX+gap, y:GROUND_Y-h, width:OBS_W, height:h });
+                        }
+                    }
                 }
             }
 
@@ -277,357 +427,304 @@
                 return px < ox+ow && px+pw > ox && py < oy+oh && py+ph > oy;
             }
 
-            function spawnObstacle() {
-                const maxH = getMaxClearableHeight(speed);
-                const h = 24 + Math.random() * (maxH - 24);
-                obstacles.push({ x: W, y: GROUND_Y - h, width: OBS_W, height: h, counted: false });
-            }
-
-            function spawnCoin() {
-                coins.push({ x: W, y: GROUND_Y - 50 - Math.random()*30, width: COIN_SIZE, height: COIN_SIZE, collected: false });
-            }
-
-            // --- Draw functions ---
-            function drawPlayer(x,y,w,h) {
-                // glowing cube with current theme player color (or ability tint)
-                let color = currentTheme.ground;
-                if (equippedAbility && gameState !== STATE.MENU) {
-                    const a = ABILITIES[equippedAbility];
-                    if (a) color = a.color;
-                }
+            // ---------------- Drawing ----------------
+            function drawPlayerShape() {
+                const avatar = getAvatar();
+                let color = avatar.color;
+                // if abilities equipped, maybe tint? we keep avatar color.
                 ctx.fillStyle = color;
-                ctx.shadowColor = color;
+                ctx.shadowColor = avatar.glow;
                 ctx.shadowBlur = 15;
-                ctx.fillRect(x, y, w, h);
+                const cx = player.x + player.width/2, cy = player.y + player.height/2;
+                const w = player.width, h = player.height;
+                ctx.beginPath();
+                switch (avatar.shape) {
+                    case 'square': ctx.rect(player.x, player.y, w, h); break;
+                    case 'diamond': ctx.moveTo(cx, player.y); ctx.lineTo(player.x+w, cy); ctx.lineTo(cx, player.y+h); ctx.lineTo(player.x, cy); break;
+                    case 'circle': ctx.arc(cx, cy, w/2, 0, Math.PI*2); break;
+                    case 'star': 
+                        const spikes=5, outerR=w/2, innerR=w/4;
+                        let rot = Math.PI/2*3, step = Math.PI/spikes;
+                        for (let i=0; i<spikes; i++) {
+                            let x = cx + Math.cos(rot)*outerR, y = cy + Math.sin(rot)*outerR;
+                            i===0 ? ctx.moveTo(x,y) : ctx.lineTo(x,y);
+                            rot += step;
+                            x = cx + Math.cos(rot)*innerR; y = cy + Math.sin(rot)*innerR;
+                            ctx.lineTo(x,y);
+                            rot += step;
+                        }
+                        break;
+                    case 'hexagon':
+                        const sides=6, radius=w/2;
+                        for (let i=0; i<sides; i++) {
+                            let angle = Math.PI/2 + i*2*Math.PI/sides;
+                            let x = cx + radius*Math.cos(angle), y = cy + radius*Math.sin(angle);
+                            i===0 ? ctx.moveTo(x,y) : ctx.lineTo(x,y);
+                        }
+                        break;
+                }
+                ctx.closePath();
+                ctx.fill();
                 ctx.shadowBlur = 0; ctx.shadowColor = 'transparent';
             }
 
-            function drawButton(text, x, y, w, h, color, textColor='#fff') {
-                ctx.fillStyle = color;
-                ctx.shadowColor = color;
-                ctx.shadowBlur = 10;
-                ctx.fillRect(x, y, w, h);
-                ctx.shadowBlur = 0; ctx.shadowColor = 'transparent';
-                ctx.font = 'bold 14px "Courier New"';
-                ctx.textAlign = 'center';
-                ctx.fillStyle = textColor;
-                ctx.fillText(text, x+w/2, y+h/2+5);
+            function drawButton(x,y,w,h,color,text) {
+                ctx.fillStyle = color; ctx.shadowColor = color; ctx.shadowBlur = 10;
+                ctx.fillRect(x,y,w,h);
+                ctx.shadowBlur = 0;
+                ctx.font = 'bold 13px "Courier New"'; ctx.textAlign = 'center';
+                ctx.fillStyle = '#fff'; ctx.fillText(text, x+w/2, y+h/2+5);
             }
 
             function drawMenu() {
                 ctx.clearRect(0,0,W,H);
-                const grad = ctx.createLinearGradient(0,0,0,H);
-                grad.addColorStop(0, '#0a0a20'); grad.addColorStop(1, '#151530');
-                ctx.fillStyle = grad; ctx.fillRect(0,0,W,H);
+                const bg = ctx.createLinearGradient(0,0,0,H);
+                bg.addColorStop(0,'#0a0a20'); bg.addColorStop(1,'#151530');
+                ctx.fillStyle = bg; ctx.fillRect(0,0,W,H);
 
                 ctx.font = 'bold 24px "Courier New"'; ctx.textAlign = 'center';
                 ctx.fillStyle = '#0ff'; ctx.shadowColor = '#0ff'; ctx.shadowBlur = 12;
-                ctx.fillText('NEON GAUNTLET', W/2, 60);
-                ctx.shadowBlur = 0; ctx.shadowColor = 'transparent';
+                ctx.fillText('NEON GAUNTLET', W/2, 55);
+                ctx.shadowBlur = 0;
+                const av = getAvatar();
                 ctx.font = '13px "Courier New"'; ctx.fillStyle = '#aaa';
-                ctx.fillText(`Coins: ${playerCoins}  |  High Score: ${highScore}`, W/2, 100);
-                ctx.fillText(`Abilities Unlocked: ${unlockedAbilities.length}`, W/2, 120);
+                ctx.fillText(`Coins: ${playerCoins}  |  Best: ${highScore}`, W/2, 85);
+                ctx.fillText(`Avatar: ${av.name} (${av.shape})`, W/2, 105);
 
                 buttons = [];
-                // Play button
-                buttons.push({ id:'play', x:W/2-70, y:150, w:140, h:35 });
-                drawButton('PLAY', W/2-70, 150, 140, 35, '#00cc44');
-                // Shop button
-                buttons.push({ id:'shop', x:W/2-70, y:200, w:140, h:35 });
-                drawButton('SHOP', W/2-70, 200, 140, 35, '#ffaa00');
-                // Boss button
-                const bossText = bossDefeated ? 'BOSS (DEFEATED)' : `BOSS (${BOSS_ENTRY_FEE} coins)`;
-                buttons.push({ id:'boss', x:W/2-70, y:250, w:140, h:35 });
-                drawButton(bossText, W/2-70, 250, 140, 35, bossDefeated ? '#666' : '#ff4444');
-
-                ctx.textAlign = 'left';
+                buttons.push({ id:'play', x:W/2-70, y:130, w:140, h:32 });
+                drawButton(W/2-70, 130, 140, 32, '#00cc44', 'PLAY');
+                buttons.push({ id:'shop', x:W/2-70, y:175, w:140, h:32 });
+                drawButton(W/2-70, 175, 140, 32, '#ffaa00', 'SHOP');
+                const bossLabel = bossDefeated ? 'BOSS (DEFEATED)' : `BOSS (${BOSS_ENTRY_FEE} coins)`;
+                buttons.push({ id:'boss', x:W/2-70, y:220, w:140, h:32 });
+                drawButton(W/2-70, 220, 140, 32, bossDefeated ? '#666' : '#ff4444', bossLabel);
             }
 
             function drawShop() {
                 ctx.clearRect(0,0,W,H);
-                const grad = ctx.createLinearGradient(0,0,0,H);
-                grad.addColorStop(0, '#0a0a20'); grad.addColorStop(1, '#151530');
-                ctx.fillStyle = grad; ctx.fillRect(0,0,W,H);
+                const bg = ctx.createLinearGradient(0,0,0,H);
+                bg.addColorStop(0,'#0a0a20'); bg.addColorStop(1,'#151530');
+                ctx.fillStyle = bg; ctx.fillRect(0,0,W,H);
 
                 ctx.font = 'bold 22px "Courier New"'; ctx.textAlign = 'center';
-                ctx.fillStyle = '#ffaa00'; ctx.fillText('SHOP', W/2, 40);
+                ctx.fillStyle = '#ffaa00'; ctx.fillText('SHOP', W/2, 35);
                 ctx.font = '12px "Courier New"'; ctx.fillStyle = '#aaa';
-                ctx.fillText(`Coins: ${playerCoins} | Slots: ${abilitySlots}`, W/2, 70);
+                ctx.fillText(`Coins: ${playerCoins} | Slots: ${abilitySlots} | Equipped: ${equippedAbilities.length}/${abilitySlots}`, W/2, 55);
 
                 buttons = [];
-                const abilities = Object.keys(ABILITIES);
-                let yPos = 100;
-                abilities.forEach(key => {
+                let y = 75;
+                for (let key in ABILITIES) {
                     const a = ABILITIES[key];
                     const owned = unlockedAbilities.includes(key);
-                    const equipped = equippedAbility === key;
+                    const equipped = equippedAbilities.includes(key);
                     const canBuy = playerCoins >= a.cost && !owned;
-                    const color = owned ? (equipped ? '#00ff44' : '#555') : '#ffaa00';
-                    const text = `${a.name} - ${a.desc} (${a.cost} coins) ${owned ? (equipped ? '[EQUIPPED]' : '[OWNED]') : ''}`;
-                    ctx.font = '11px "Courier New"';
-                    ctx.fillStyle = color;
-                    ctx.fillText(text, W/2, yPos+10);
-                    if (!owned && canBuy) {
-                        buttons.push({ id:`buy_${key}`, x:W/2-40, y:yPos+15, w:80, h:22 });
-                        drawButton('BUY', W/2-40, yPos+15, 80, 22, '#00cc44');
-                    } else if (owned && !equipped && abilitySlots > 0) {
-                        buttons.push({ id:`equip_${key}`, x:W/2-40, y:yPos+15, w:80, h:22 });
-                        drawButton('EQUIP', W/2-40, yPos+15, 80, 22, '#00aaff');
-                    } else if (owned && equipped) {
-                        buttons.push({ id:`unequip`, x:W/2-40, y:yPos+15, w:80, h:22 });
-                        drawButton('UNEQUIP', W/2-40, yPos+15, 80, 22, '#ff4444');
+                    const canEquip = owned && !equipped && equippedAbilities.length < abilitySlots;
+                    const canUnequip = equipped;
+
+                    ctx.font = '11px "Courier New"'; ctx.fillStyle = owned ? (equipped ? '#0f0' : '#888') : '#ffaa00';
+                    ctx.fillText(`${a.name} - ${a.desc} (${a.cost} coins)`, W/2, y+10);
+                    if (canBuy) {
+                        buttons.push({ id:'buy_'+key, x:W/2-40, y:y+15, w:80, h:22 });
+                        drawButton(W/2-40, y+15, 80, 22, '#00cc44', 'BUY');
+                    } else if (canEquip) {
+                        buttons.push({ id:'equip_'+key, x:W/2-40, y:y+15, w:80, h:22 });
+                        drawButton(W/2-40, y+15, 80, 22, '#00aaff', 'EQUIP');
+                    } else if (canUnequip) {
+                        buttons.push({ id:'unequip_'+key, x:W/2-40, y:y+15, w:80, h:22 });
+                        drawButton(W/2-40, y+15, 80, 22, '#ff4444', 'UNEQUIP');
                     }
-                    yPos += 50;
-                });
-                // Back button
-                buttons.push({ id:'back', x:20, y:H-50, w:80, h:30 });
-                drawButton('BACK', 20, H-50, 80, 30, '#444');
-                ctx.textAlign = 'left';
+                    y += 40;
+                }
+                buttons.push({ id:'back', x:20, y:H-45, w:80, h:30 });
+                drawButton(20, H-45, 80, 30, '#444', 'BACK');
             }
 
-            function drawGame() {
+            function drawGameOverlay() {
                 ctx.clearRect(0,0,W,H);
                 const grad = ctx.createLinearGradient(0,0,0,H);
                 grad.addColorStop(0, currentTheme.bg[0]); grad.addColorStop(1, currentTheme.bg[1]);
                 ctx.fillStyle = grad; ctx.fillRect(0,0,W,H);
 
-                // Stars
+                // stars
                 ctx.fillStyle = currentTheme.stars; ctx.shadowColor = currentTheme.stars; ctx.shadowBlur = 3;
-                stars.forEach(s => { ctx.beginPath(); ctx.arc(s.x, s.y, s.radius, 0, Math.PI*2); ctx.fill(); });
-                ctx.shadowBlur = 0;
+                for (let s of stars) { ctx.beginPath(); ctx.arc(s.x,s.y,s.radius,0,Math.PI*2); ctx.fill(); }
+                ctx.shadowBlur=0;
 
-                // Speed lines
+                // speed lines
                 ctx.strokeStyle = 'rgba(255,255,255,0.2)'; ctx.lineWidth = 1.5;
-                speedLines.forEach(l => { ctx.globalAlpha=l.life*0.7; ctx.beginPath(); ctx.moveTo(l.x,l.y); ctx.lineTo(l.x+l.length,l.y); ctx.stroke(); });
+                for (let l of speedLines) { ctx.globalAlpha=l.life*0.7; ctx.beginPath(); ctx.moveTo(l.x,l.y); ctx.lineTo(l.x+l.length,l.y); ctx.stroke(); }
                 ctx.globalAlpha=1;
 
-                // Ground
-                ctx.beginPath(); ctx.strokeStyle=currentTheme.ground; ctx.lineWidth=2; ctx.shadowColor=currentTheme.ground; ctx.shadowBlur=10;
-                const dash=30, gap=15, total=dash+gap, offset=(Date.now()*speed*0.03)%total;
-                for(let x=-offset; x<W+total; x+=total){ ctx.moveTo(x,GROUND_Y); ctx.lineTo(x+dash,GROUND_Y); }
+                // ground
+                ctx.beginPath(); ctx.strokeStyle = currentTheme.ground; ctx.lineWidth=2; ctx.shadowColor=currentTheme.ground; ctx.shadowBlur=10;
+                const dash=30, gap=15, total=dash+gap, off=(Date.now()*speed*0.03)%total;
+                for (let x=-off; x<W+total; x+=total) { ctx.moveTo(x,GROUND_Y); ctx.lineTo(x+dash,GROUND_Y); }
                 ctx.stroke(); ctx.shadowBlur=0;
 
-                // Obstacles
-                obstacles.forEach(o=>{ ctx.fillStyle=currentTheme.obs; ctx.shadowColor=currentTheme.obs; ctx.shadowBlur=12; ctx.fillRect(o.x,o.y,o.width,o.height); });
+                // obstacles
+                for (let o of obstacles) { ctx.fillStyle=currentTheme.obs; ctx.shadowColor=currentTheme.obs; ctx.shadowBlur=12; ctx.fillRect(o.x,o.y,o.width,o.height); }
+                for (let o of (gameState===STATE.BOSS ? bossObstacles : [])) { ctx.fillStyle=currentTheme.obs; ctx.shadowColor=currentTheme.obs; ctx.shadowBlur=12; ctx.fillRect(o.x,o.y,o.width,o.height); }
                 ctx.shadowBlur=0;
 
-                // Coins
-                coins.forEach(c=>{
+                // coins
+                for (let c of coins) {
                     ctx.fillStyle='#ffd700'; ctx.shadowColor='#ffd700'; ctx.shadowBlur=8;
                     ctx.beginPath(); ctx.arc(c.x+c.width/2, c.y+c.height/2, c.width/2, 0, Math.PI*2); ctx.fill();
-                });
+                }
                 ctx.shadowBlur=0;
 
-                // Player
-                drawPlayer(player.x, player.y, player.width, player.height);
-                if(shieldRemaining>0){ ctx.strokeStyle='#0ff'; ctx.lineWidth=3; ctx.shadowColor='#0ff'; ctx.shadowBlur=10; ctx.beginPath(); ctx.arc(player.x+player.width/2,player.y+player.height/2,player.width/2+5,0,Math.PI*2); ctx.stroke(); }
-                // double/triple jump dot
-                if(!player.grounded && (player.doubleJumpAvailable || extraJumpsRemaining>0)){
+                // player
+                drawPlayerShape();
+                if (player.shield > 0) {
+                    ctx.strokeStyle = '#0ff'; ctx.lineWidth=3; ctx.shadowColor='#0ff'; ctx.shadowBlur=10;
+                    ctx.beginPath(); ctx.arc(player.x+player.width/2, player.y+player.height/2, player.width/2+5, 0, Math.PI*2); ctx.stroke();
+                }
+                if (!player.grounded && (player.doubleJumpAvailable || player.extraJumps>0)) {
                     ctx.fillStyle='#fff'; ctx.shadowColor='#fff'; ctx.shadowBlur=8;
                     ctx.beginPath(); ctx.arc(player.x+player.width/2, player.y-8, 3, 0, Math.PI*2); ctx.fill();
                 }
                 ctx.shadowBlur=0;
 
-                // Particles
-                particles.forEach(p=>{ ctx.globalAlpha=p.life; ctx.fillStyle=p.color; ctx.shadowColor=p.color; ctx.shadowBlur=6; ctx.fillRect(p.x,p.y,p.size,p.size); });
-                ctx.globalAlpha=1;
-
-                // UI
-                ctx.font='bold 18px "Courier New"'; ctx.textAlign='center'; ctx.fillStyle='#fff';
-                ctx.fillText(`${score}`, W/2, 45); ctx.font='12px'; ctx.fillText(`LVL ${level}`, W/2, 65);
-                if(gameState===STATE.BOSS) ctx.fillText(`BOSS ${bossProgress+1}/${BOSS_OBSTACLE_COUNT}`, W/2, 85);
-            }
-
-            function drawGameOver() {
-                drawGame(); // still show scene behind
-                ctx.fillStyle='rgba(0,0,0,0.7)'; ctx.fillRect(0,0,W,H);
-                ctx.font='bold 22px "Courier New"'; ctx.textAlign='center'; ctx.fillStyle='#fff';
-                ctx.fillText('GAME OVER', W/2, H/2-40);
-                ctx.font='14px'; ctx.fillText(`Score: ${score}  Coins earned: ${runCoins}`, W/2, H/2-10);
-                ctx.fillText(`Total coins: ${playerCoins}`, W/2, H/2+20);
-                ctx.fillText('TAP TO CONTINUE', W/2, H/2+60);
-            }
-
-            // --- Main update ---
-            function update(dtSec) {
-                const factor = Math.min(dtSec/(1/60), 3.0);
-                // Update stars always
-                stars.forEach(s=>{ s.x -= s.speed*factor*0.5; if(s.x<-5){ s.x=W+5; s.y=Math.random()*(GROUND_Y-10); } });
                 // particles
-                for(let i=particles.length-1;i>=0;i--){ let p=particles[i]; p.x+=p.vx*factor; p.y+=p.vy*factor; p.life-=p.decay*factor; if(p.life<=0) particles.splice(i,1); }
-                flashAlpha=Math.max(0,flashAlpha-0.04*factor);
-                shakeAmount=Math.max(0,shakeAmount-0.6*factor);
-
-                if(gameState===STATE.PLAYING || gameState===STATE.BOSS) {
-                    const isBoss = gameState===STATE.BOSS;
-                    const spd = isBoss ? bossSpeed : speed;
-
-                    // Player physics
-                    player.vy += GRAVITY*factor;
-                    player.y += player.vy*factor;
-                    if(player.y+player.height >= GROUND_Y) {
-                        player.y = GROUND_Y-player.height; player.vy=0; player.grounded=true;
-                        player.doubleJumpAvailable = true;
-                        if(equippedAbility==='tripleJump') extraJumpsRemaining = 1;
-                    } else player.grounded=false;
-
-                    // Speed lines
-                    if(spd>6 && Math.random()<0.3*factor) speedLines.push({x:Math.random()*W, y:Math.random()*GROUND_Y, length:20+Math.random()*60, life:1, decay:0.02+spd*0.005});
-                    moveObjects(speedLines, spd*1.2, factor); speedLines = speedLines.filter(l=>l.life>0);
-
-                    if(!isBoss) {
-                        // Spawn obstacles & coins
-                        const delay = Math.max(26, BASE_SPAWN_DELAY - spd*3.3);
-                        spawnTimer+=factor; if(spawnTimer>=delay){ spawnTimer=0; spawnObstacle(); }
-                        coinSpawnTimer+=factor; if(coinSpawnTimer>=COIN_SPAWN_DELAY){ coinSpawnTimer=0; if(Math.random()<0.6) spawnCoin(); }
-                        moveObjects(obstacles, spd, factor);
-                        moveObjects(coins, spd, factor);
-
-                        // Scoring & coin collection
-                        obstacles.forEach(o=>{
-                            if(!o.counted && o.x+o.width < player.x) {
-                                o.counted=true;
-                                let points = 1;
-                                if(equippedAbility==='doubleScore') points*=2;
-                                score+=points; runCoins+=1; scoreThisLevel+=1;
-                                const maxSpeed = baseSpeed + (LEVEL_SPEED_BOOST*(level-1));
-                                speed = Math.min(maxSpeed, baseSpeed + scoreThisLevel*SPEED_INCREASE_PER_SCORE);
-                                if(equippedAbility==='slowTime') speed*=0.75;
-                                if(scoreThisLevel >= SCORE_PER_LEVEL) advanceLevel();
-                            }
-                        });
-                        // collect coins
-                        for(let i=coins.length-1;i>=0;i--){
-                            const c=coins[i];
-                            if(!c.collected && checkCollision(player.x,player.y,player.width,player.height, c.x,c.y,c.width,c.height)){
-                                c.collected=true;
-                                runCoins+=1;
-                                coins.splice(i,1);
-                            }
-                        }
-                        // collision obstacles
-                        for(let o of obstacles){
-                            if(checkCollision(player.x,player.y,player.width,player.height, o.x,o.y,o.width,o.height)){
-                                if(shieldRemaining>0){ shieldRemaining--; obstacles.splice(obstacles.indexOf(o),1); flashAlpha=0.4; continue; }
-                                die(); return;
-                            }
-                        }
-                    } else { // Boss mode
-                        // move boss obstacles
-                        for(let i=bossObstacles.length-1;i>=0;i--){
-                            bossObstacles[i].x -= spd*factor;
-                            if(bossObstacles[i].x + bossObstacles[i].width < -20) bossObstacles.splice(i,1);
-                        }
-                        // collision & progress
-                        let hit = false;
-                        for(let o of bossObstacles){
-                            if(checkCollision(player.x,player.y,player.width,player.height, o.x,o.y,o.width,o.height)){
-                                if(shieldRemaining>0){ shieldRemaining--; bossObstacles.splice(bossObstacles.indexOf(o),1); flashAlpha=0.5; continue; }
-                                hit = true; break;
-                            }
-                        }
-                        if(hit) { die(); return; }
-                        bossProgress = BOSS_OBSTACLE_COUNT - bossObstacles.length;
-                        if(bossProgress >= BOSS_OBSTACLE_COUNT) { winBoss(); return; }
-                        // spawn next batch? continuous flow
-                        if(bossObstacles.length < 5) {
-                            const last = bossObstacles.length>0 ? bossObstacles[bossObstacles.length-1].x : W+100;
-                            const gap = Math.max(40, 90 - bossProgress*0.4);
-                            const maxH = getMaxClearableHeight(bossSpeed);
-                            const h = 24 + Math.random()*(maxH-24);
-                            bossObstacles.push({ x: last+gap, y:GROUND_Y-h, width:OBS_W, height:h });
-                        }
-                    }
-                }
+                for (let p of particles) { ctx.globalAlpha=p.life; ctx.fillStyle=p.color; ctx.shadowColor=p.color; ctx.shadowBlur=6; ctx.fillRect(p.x,p.y,p.size,p.size); }
+                ctx.globalAlpha=1;
             }
 
-            // --- Draw based on state ---
+            function drawHUD() {
+                ctx.font = 'bold 18px "Courier New"'; ctx.textAlign = 'center'; ctx.fillStyle='#fff';
+                ctx.fillText(`${score}`, W/2, 45);
+                ctx.font = '12px'; ctx.fillText(`LVL ${level}`, W/2, 65);
+                if (gameState === STATE.BOSS) ctx.fillText(`BOSS ${bossProgress}/${BOSS_TOTAL}`, W/2, 85);
+            }
+
             function draw() {
                 const sx = shakeAmount ? (Math.random()-0.5)*shakeAmount : 0;
                 const sy = shakeAmount ? (Math.random()-0.5)*shakeAmount : 0;
-                ctx.save(); ctx.translate(sx, sy);
-                if(gameState===STATE.MENU) drawMenu();
-                else if(gameState===STATE.SHOP) drawShop();
-                else if(gameState===STATE.PLAYING || gameState===STATE.BOSS) drawGame();
-                else if(gameState===STATE.GAMEOVER) drawGameOver();
+                ctx.save(); ctx.translate(sx,sy);
+
+                if (gameState === STATE.MENU) drawMenu();
+                else if (gameState === STATE.SHOP) drawShop();
+                else if (gameState === STATE.PLAYING || gameState === STATE.BOSS) {
+                    drawGameOverlay();
+                    drawHUD();
+                } else if (gameState === STATE.GAMEOVER) {
+                    drawGameOverlay();
+                    drawHUD();
+                    ctx.fillStyle='rgba(0,0,0,0.7)'; ctx.fillRect(0,0,W,H);
+                    ctx.font = 'bold 22px "Courier New"'; ctx.textAlign='center'; ctx.fillStyle='#fff';
+                    ctx.fillText('GAME OVER', W/2, H/2-40);
+                    ctx.font = '14px';
+                    ctx.fillText(`Score: ${score}  Coins earned: ${runCoins}`, W/2, H/2-10);
+                    ctx.fillText(`Total coins: ${playerCoins}`, W/2, H/2+20);
+                    ctx.fillText('TAP TO CONTINUE', W/2, H/2+60);
+                }
+
                 ctx.restore();
             }
 
-            // --- Input ---
-            function handleJump() {
-                if(gameState===STATE.PLAYING || gameState===STATE.BOSS){
-                    if(player.grounded){
-                        player.vy = JUMP_VEL; player.grounded=false; player.doubleJumpAvailable=true;
-                    } else if(player.doubleJumpAvailable){
-                        player.vy = DOUBLE_JUMP_VEL; player.doubleJumpAvailable=false;
-                    } else if(extraJumpsRemaining>0){
-                        player.vy = DOUBLE_JUMP_VEL; extraJumpsRemaining--;
-                    }
-                } else if(gameState===STATE.GAMEOVER){
-                    gameState = STATE.MENU;
-                }
-            }
-
-            canvas.addEventListener('mousedown', e => {
+            // ---------------- Input handling ----------------
+            function getCanvasCoords(e) {
                 const rect = canvas.getBoundingClientRect();
                 const scaleX = W / rect.width;
                 const scaleY = H / rect.height;
-                const mx = (e.clientX - rect.left) * scaleX;
-                const my = (e.clientY - rect.top) * scaleY;
-                if(gameState===STATE.MENU || gameState===STATE.SHOP || gameState===STATE.GAMEOVER) {
-                    // button check
-                    for(let btn of buttons){
-                        if(mx>=btn.x && mx<=btn.x+btn.w && my>=btn.y && my<=btn.y+btn.h){
-                            if(gameState===STATE.MENU){
-                                if(btn.id==='play'){ resetRun(); gameState=STATE.PLAYING; }
-                                else if(btn.id==='shop'){ gameState=STATE.SHOP; }
-                                else if(btn.id==='boss'){ if(!bossDefeated) startBossLevel(); }
-                            } else if(gameState===STATE.SHOP){
-                                if(btn.id==='back') gameState=STATE.MENU;
-                                else if(btn.id.startsWith('buy_')){
-                                    const key = btn.id.split('_')[1];
-                                    if(playerCoins >= ABILITIES[key].cost && !unlockedAbilities.includes(key)){
-                                        playerCoins -= ABILITIES[key].cost;
-                                        unlockedAbilities.push(key);
-                                        saveData();
-                                    }
-                                } else if(btn.id.startsWith('equip_')){
-                                    const key = btn.id.split('_')[1];
-                                    if(unlockedAbilities.includes(key) && equippedAbility!==key && abilitySlots>0){
-                                        equippedAbility = key;
-                                        saveData();
-                                    }
-                                } else if(btn.id==='unequip'){
-                                    equippedAbility = null;
-                                    saveData();
-                                }
-                            } else if(gameState===STATE.GAMEOVER){
-                                gameState=STATE.MENU;
-                            }
-                            break;
+                return {
+                    x: (e.clientX - rect.left) * scaleX,
+                    y: (e.clientY - rect.top) * scaleY
+                };
+            }
+
+            canvas.addEventListener('mousedown', e => {
+                const coords = getCanvasCoords(e);
+                handleInput(coords.x, coords.y);
+            });
+            canvas.addEventListener('touchstart', e => {
+                e.preventDefault();
+                const touch = e.touches[0];
+                const coords = getCanvasCoords(touch);
+                handleInput(coords.x, coords.y);
+            }, { passive: false });
+            document.addEventListener('keydown', e => {
+                if (e.code === 'Space' || e.key === ' ') {
+                    e.preventDefault();
+                    if (gameState === STATE.PLAYING || gameState === STATE.BOSS) {
+                        // jump
+                        if (player.grounded) {
+                            player.vy = JUMP_VEL; player.grounded = false; player.doubleJumpAvailable = true;
+                        } else if (player.doubleJumpAvailable) {
+                            player.vy = DOUBLE_JUMP_VEL; player.doubleJumpAvailable = false;
+                        } else if (player.extraJumps > 0) {
+                            player.vy = DOUBLE_JUMP_VEL; player.extraJumps--;
                         }
+                    } else if (gameState === STATE.GAMEOVER) {
+                        gameState = STATE.MENU;
                     }
-                    if(gameState===STATE.GAMEOVER && !buttons.length) gameState=STATE.MENU;
-                } else {
-                    handleJump();
                 }
             });
-            document.addEventListener('keydown', e => {
-                if(e.code==='Space' || e.key===' '){ e.preventDefault(); handleJump(); }
-            });
-            canvas.addEventListener('touchstart', e => { e.preventDefault(); handleJump(); }, {passive:false});
-            canvas.addEventListener('touchmove', e => e.preventDefault(), {passive:false});
 
-            // Init
+            function handleInput(mx, my) {
+                if (gameState === STATE.MENU) {
+                    for (let b of buttons) {
+                        if (mx >= b.x && mx <= b.x+b.w && my >= b.y && my <= b.y+b.h) {
+                            if (b.id === 'play') { resetRun(); gameState = STATE.PLAYING; }
+                            else if (b.id === 'shop') { gameState = STATE.SHOP; }
+                            else if (b.id === 'boss') { if (!bossDefeated) startBoss(); }
+                            return;
+                        }
+                    }
+                } else if (gameState === STATE.SHOP) {
+                    for (let b of buttons) {
+                        if (mx >= b.x && mx <= b.x+b.w && my >= b.y && my <= b.y+b.h) {
+                            if (b.id === 'back') { gameState = STATE.MENU; }
+                            else if (b.id.startsWith('buy_')) {
+                                const key = b.id.substring(4);
+                                if (playerCoins >= ABILITIES[key].cost && !unlockedAbilities.includes(key)) {
+                                    playerCoins -= ABILITIES[key].cost;
+                                    unlockedAbilities.push(key);
+                                    saveData();
+                                }
+                            } else if (b.id.startsWith('equip_')) {
+                                const key = b.id.substring(6);
+                                if (unlockedAbilities.includes(key) && equippedAbilities.length < abilitySlots) {
+                                    equippedAbilities.push(key);
+                                    saveData();
+                                }
+                            } else if (b.id.startsWith('unequip_')) {
+                                const key = b.id.substring(8);
+                                equippedAbilities = equippedAbilities.filter(a => a !== key);
+                                saveData();
+                            }
+                            return;
+                        }
+                    }
+                } else if (gameState === STATE.GAMEOVER) {
+                    gameState = STATE.MENU;
+                } else if (gameState === STATE.PLAYING || gameState === STATE.BOSS) {
+                    // jump
+                    if (player.grounded) {
+                        player.vy = JUMP_VEL; player.grounded = false; player.doubleJumpAvailable = true;
+                    } else if (player.doubleJumpAvailable) {
+                        player.vy = DOUBLE_JUMP_VEL; player.doubleJumpAvailable = false;
+                    } else if (player.extraJumps > 0) {
+                        player.vy = DOUBLE_JUMP_VEL; player.extraJumps--;
+                    }
+                }
+            }
+
+            // ---------------- Init & Loop ----------------
             loadData();
-            stars = Array.from({length:STAR_COUNT}, ()=>({x:Math.random()*W, y:Math.random()*GROUND_Y, speed:0.5+Math.random()*2, radius:0.5+Math.random()*1.8}));
+            loadLeaderboard();
+            stars = [];
+            for (let i=0; i<STAR_COUNT; i++) {
+                stars.push({ x:Math.random()*W, y:Math.random()*GROUND_Y, speed:0.5+Math.random()*2, radius:0.5+Math.random()*1.8 });
+            }
 
-            let lastTime=0;
-            function loop(time){
-                if(!lastTime) lastTime=time;
-                let dt = (time-lastTime)/1000;
-                if(dt<=0) dt=0.016;
-                lastTime=time;
+            let lastTime = 0;
+            function loop(time) {
+                if (!lastTime) lastTime = time;
+                let dt = (time - lastTime) / 1000;
+                if (dt <= 0) dt = 0.016;
+                lastTime = time;
                 update(dt);
                 draw();
                 requestAnimationFrame(loop);
