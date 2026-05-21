@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>Neon Gauntlet – 8‑Point Star Avatar</title>
+    <title>Neon Gauntlet – GOD Tier & Hard Boss</title>
     <style>
         * { margin:0; padding:0; box-sizing:border-box; }
         body {
@@ -56,7 +56,7 @@
             let highScore = 0;
             let leaderboard = [];
 
-            const SAVE_KEY = 'neonGauntletV8';
+            const SAVE_KEY = 'neonGauntletV9';
             const LEADERBOARD_KEY = 'neonGauntletLeaderboard';
 
             const ABILITIES = {
@@ -67,13 +67,15 @@
                 tripleJump:{ name:'Triple Jump',  desc:'One extra mid‑air jump',     cost:60, color:'#ff2222' }
             };
 
+            // Avatar tiers – includes new GOD tier (decagon) at 500
             const AVATARS = [
                 { min:0,   shape:'square',    color:'#00ffff', glow:'#00ffff', name:'Rookie' },
                 { min:10,  shape:'diamond',   color:'#ff44ff', glow:'#ff44ff', name:'Dasher' },
                 { min:25,  shape:'circle',    color:'#ffaa00', glow:'#ffaa00', name:'Runner' },
                 { min:50,  shape:'star5',     color:'#00ff44', glow:'#00ff44', name:'Elite' },
                 { min:100, shape:'hexagon',   color:'#ffd700', glow:'#ffd700', name:'Legend' },
-                { min:200, shape:'star8',     color:'#ff8800', glow:'#ff8800', name:'Master' }
+                { min:200, shape:'star8',     color:'#ff8800', glow:'#ff8800', name:'Master' },
+                { min:500, shape:'decagon',   color:'#ff00ff', glow:'#ff00ff', name:'GOD' }
             ];
 
             let score = 0, runCoins = 0;
@@ -98,16 +100,16 @@
             let spawnTimer=0, coinSpawnTimer=0;
             const BASE_SPAWN_DELAY = 70, COIN_SPAWN_DELAY = 90;
 
-            // Boss fight
+            // Boss fight (harder)
             let bossLives = 0;
             let bossDodged = 0;
-            const BOSS_REQUIRED_DODGES = 40;
+            const BOSS_REQUIRED_DODGES = 60;        // up from 40
             const BOSS_ENTRY_FEE = 30;
             const MAX_BOSS_LIVES = 10;
             let bossEntity = { x: W-80, y: 60, width:60, height:100, vibrate:0 };
             let bossObstacles = [];
             let bossSpawnTimer = 0;
-            let bossSpawnCooldown = 35;
+            let bossSpawnCooldown = 30;             // faster spawn
             let bossActiveObstaclesSpawned = 0;
 
             let particles=[], flashAlpha=0, shakeAmount=0;
@@ -227,7 +229,17 @@
             function spawnObstacle() {
                 const maxH = getMaxClearableHeight(speed);
                 const h = 24 + Math.random() * (maxH - 24);
-                obstacles.push({ x:W, y:GROUND_Y-h, width:OBS_W, height:h, counted:false });
+                // Level 6+ introduces chaotic wave obstacles
+                if (level >= 6 && Math.random() < 0.35) {
+                    obstacles.push({
+                        x:W, y:GROUND_Y - h, width:OBS_W, height:h,
+                        type:'wave', baseY:GROUND_Y - h, amplitude: 20 + Math.random()*20,
+                        freq:2+Math.random()*3, phase:Math.random()*Math.PI*2,
+                        counted:false
+                    });
+                } else {
+                    obstacles.push({ x:W, y:GROUND_Y - h, width:OBS_W, height:h, type:'normal', counted:false });
+                }
             }
             function spawnCoin() {
                 coins.push({ x:W, y:GROUND_Y-50-Math.random()*30, width:COIN_SIZE, height:COIN_SIZE, collected:false });
@@ -240,6 +252,7 @@
                 scoreThisLevel = 0;
                 currentTheme = themes[(level-1)%themes.length];
                 shakeAmount = 6;
+                if (level === 6) flashAlpha = 0.7; // big flash when hitting level 6
                 for (let i=0; i<15; i++) {
                     particles.push({
                         x:W/2+(Math.random()-0.5)*100, y:H/2-30,
@@ -291,7 +304,7 @@
                     playerCoins -= BOSS_ENTRY_FEE; saveData();
                     bossLives = MAX_BOSS_LIVES; bossDodged = 0;
                 }
-                bossObstacles = []; bossSpawnTimer = 0; bossSpawnCooldown = 35;
+                bossObstacles = []; bossSpawnTimer = 0; bossSpawnCooldown = 30; // faster
                 bossActiveObstaclesSpawned = 0;
                 bossEntity.x = W-80; bossEntity.y = 60; bossEntity.vibrate = 0;
                 player.y = GROUND_Y - PLAYER_H; player.vy = 0; player.grounded = true;
@@ -303,21 +316,24 @@
             }
 
             function spawnBossObstacle() {
-                const phase = Math.floor(Math.random() * 3);
+                const phase = Math.floor(Math.random() * 4); // now 4 types
                 switch (phase) {
-                    case 0:
+                    case 0: // spike
                         const spikeH = 25 + Math.random() * 20;
                         bossObstacles.push({ x:W, y:GROUND_Y - spikeH, width:18, height:spikeH, type:'spike', phase:Math.random()*Math.PI*2 });
                         break;
-                    case 1:
+                    case 1: // orb
                         bossObstacles.push({ x:W, y:100+Math.random()*80, width:20, height:20, type:'orb', baseY:100+Math.random()*80, amplitude:40+Math.random()*40, freq:2+Math.random()*2, phase:Math.random()*Math.PI*2 });
                         break;
-                    case 2:
+                    case 2: // falling debris
                         bossObstacles.push({ x:150+Math.random()*200, y:-30, width:16, height:16, type:'falling', vy:3+Math.random()*3 });
+                        break;
+                    case 3: // homing projectile (new)
+                        bossObstacles.push({ x:W, y: player.y + (Math.random()-0.5)*60, width:14, height:14, type:'homing', vy:0, speed: 1.5 + Math.random()*1.5 });
                         break;
                 }
                 bossActiveObstaclesSpawned++;
-                bossSpawnCooldown = Math.max(15, 35 - bossDodged * 0.4);
+                bossSpawnCooldown = Math.max(12, 30 - bossDodged * 0.3); // faster as you progress
             }
 
             function update(dtSec) {
@@ -332,7 +348,7 @@
 
                 if (gameState === STATE.PLAYING || gameState === STATE.BOSS) {
                     const isBoss = gameState === STATE.BOSS;
-                    const spd = isBoss ? 6.5 : speed;
+                    const spd = isBoss ? 7.0 : speed; // boss slightly faster now
                     player.vy += GRAVITY * factor; player.y += player.vy * factor;
                     if (player.y + player.height >= GROUND_Y) {
                         player.y = GROUND_Y - player.height; player.vy=0; player.grounded=true;
@@ -349,13 +365,19 @@
                     }
 
                     if (!isBoss) {
-                        const delay = Math.max(26, BASE_SPAWN_DELAY - spd*3.3);
+                        const delay = Math.max(24, BASE_SPAWN_DELAY - spd*3.3);
                         spawnTimer += factor; if (spawnTimer >= delay) { spawnTimer=0; spawnObstacle(); }
                         coinSpawnTimer += factor; if (coinSpawnTimer >= COIN_SPAWN_DELAY) { coinSpawnTimer=0; if (Math.random()<0.6) spawnCoin(); }
-                        for (let o of obstacles) o.x -= spd * factor;
+                        for (let i=obstacles.length-1; i>=0; i--) {
+                            let o = obstacles[i];
+                            o.x -= spd * factor;
+                            if (o.type === 'wave') {
+                                o.y = o.baseY + Math.sin(performance.now()/1000 * o.freq + o.phase) * o.amplitude;
+                            }
+                            if (o.x + o.width < -20) { obstacles.splice(i,1); }
+                        }
                         for (let c of coins) c.x -= spd * factor;
-                        obstacles = obstacles.filter(o => o.x+o.width > -20);
-                        coins = coins.filter(c => c.x+c.width > -20);
+                        coins = coins.filter(c => c.x + c.width > -20);
 
                         let magnetRange = equippedAbilities.includes('coinMagnet') ? 40 : 12;
                         for (let i=coins.length-1; i>=0; i--) {
@@ -386,9 +408,16 @@
                         for (let i=bossObstacles.length-1; i>=0; i--) {
                             let o = bossObstacles[i];
                             switch (o.type) {
-                                case 'spike': o.x -= 4 * factor; o.y = (GROUND_Y - o.height) - Math.sin(performance.now()/1000*3 + o.phase)*15; break;
+                                case 'spike': o.x -= 4.5 * factor; o.y = (GROUND_Y - o.height) - Math.sin(performance.now()/1000*3 + o.phase)*15; break;
                                 case 'orb': o.x -= 4.5 * factor; o.y = o.baseY + Math.sin(performance.now()/1000*o.freq+o.phase)*o.amplitude; break;
                                 case 'falling': o.y += o.vy * factor; break;
+                                case 'homing':
+                                    o.x -= 4 * factor;
+                                    // slowly track player's y
+                                    const targetY = player.y + player.height/2;
+                                    const dy = targetY - (o.y + o.height/2);
+                                    if (Math.abs(dy) > 1) o.y += Math.sign(dy) * o.speed * factor;
+                                    break;
                             }
                             if (o.x + o.width < -20 || o.y > H+30) {
                                 if (o.x + o.width < -20) { bossDodged++; if (bossDodged >= BOSS_REQUIRED_DODGES) { winBoss(); return; } }
@@ -429,19 +458,20 @@
                             i===0 ? ctx.moveTo(cx+radius*Math.cos(angle), cy+radius*Math.sin(angle)) : ctx.lineTo(cx+radius*Math.cos(angle), cy+radius*Math.sin(angle));
                         } break;
                     case 'star8':
-                        // Clean 8‑pointed star
-                        const points = 8;
-                        const outerRadius = w/2;
-                        const innerRadius = w/3.5;
-                        for (let i = 0; i < points * 2; i++) {
-                            const angle = Math.PI/2 - (i * Math.PI / points);
-                            const r = i % 2 === 0 ? outerRadius : innerRadius;
-                            const x = cx + Math.cos(angle) * r;
-                            const y = cy - Math.sin(angle) * r;
-                            if (i === 0) ctx.moveTo(x, y);
-                            else ctx.lineTo(x, y);
-                        }
-                        break;
+                        const points8 = 8, outerR8 = w/2, innerR8 = w/3.5;
+                        for (let i=0; i<points8*2; i++) {
+                            const angle = Math.PI/2 - i*Math.PI/points8;
+                            const r = i%2===0 ? outerR8 : innerR8;
+                            const x = cx + Math.cos(angle)*r, y = cy - Math.sin(angle)*r;
+                            i===0 ? ctx.moveTo(x,y) : ctx.lineTo(x,y);
+                        } break;
+                    case 'decagon':
+                        const decaSides = 10, decaRadius = w/2;
+                        for (let i=0; i<decaSides; i++) {
+                            let angle = Math.PI/2 + i*2*Math.PI/decaSides;
+                            let x = cx + decaRadius*Math.cos(angle), y = cy + decaRadius*Math.sin(angle);
+                            i===0 ? ctx.moveTo(x,y) : ctx.lineTo(x,y);
+                        } break;
                 }
                 ctx.closePath(); ctx.fill(); ctx.shadowBlur = 0; ctx.shadowColor = 'transparent';
             }
@@ -514,12 +544,15 @@
                     const bx = bossEntity.x+(Math.random()-0.5)*bossEntity.vibrate, by = bossEntity.y+(Math.random()-0.5)*bossEntity.vibrate;
                     ctx.fillStyle = '#ff3333'; ctx.shadowColor = '#ff3333'; ctx.shadowBlur = 20; ctx.fillRect(bx,by,bossEntity.width,bossEntity.height);
                     for (let o of bossObstacles) {
-                        ctx.fillStyle = '#ff8800'; ctx.shadowColor = '#ff8800'; ctx.shadowBlur = 12;
-                        if (o.type === 'orb') { ctx.beginPath(); ctx.arc(o.x+o.width/2, o.y+o.height/2, o.width/2, 0, Math.PI*2); ctx.fill(); }
+                        ctx.fillStyle = o.type==='homing' ? '#ff8800' : '#ff8800'; ctx.shadowColor = ctx.fillStyle; ctx.shadowBlur = 12;
+                        if (o.type === 'orb' || o.type === 'homing') { ctx.beginPath(); ctx.arc(o.x+o.width/2, o.y+o.height/2, o.width/2, 0, Math.PI*2); ctx.fill(); }
                         else ctx.fillRect(o.x, o.y, o.width, o.height);
                     }
                 } else {
-                    for (let o of obstacles) { ctx.fillStyle=currentTheme.obs; ctx.shadowColor=currentTheme.obs; ctx.shadowBlur=12; ctx.fillRect(o.x,o.y,o.width,o.height); }
+                    for (let o of obstacles) {
+                        ctx.fillStyle=currentTheme.obs; ctx.shadowColor=currentTheme.obs; ctx.shadowBlur=12;
+                        ctx.fillRect(o.x, o.y, o.width, o.height);
+                    }
                     for (let c of coins) { ctx.fillStyle='#ffd700'; ctx.shadowColor='#ffd700'; ctx.shadowBlur=8; ctx.beginPath(); ctx.arc(c.x+c.width/2, c.y+c.height/2, c.width/2,0,Math.PI*2); ctx.fill(); }
                 }
                 ctx.shadowBlur=0; drawPlayerShape();
@@ -533,6 +566,9 @@
                 ctx.font = 'bold 18px "Courier New"'; ctx.textAlign='center'; ctx.fillStyle='#fff';
                 ctx.fillText(`${score}`, W/2,45); ctx.font='12px'; ctx.fillText(`LVL ${level}`, W/2,65);
                 if (gameState===STATE.BOSS) ctx.fillText(`BOSS: ${bossDodged}/${BOSS_REQUIRED_DODGES}  LIVES: ${bossLives}`, W/2,105);
+                else if (gameState===STATE.PLAYING && level >= 6) {
+                    ctx.fillStyle = '#ff88ff'; ctx.fillText('CHAOS MODE', W/2, 85);
+                }
             }
 
             function draw() {
