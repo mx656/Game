@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>Neon Gauntlet – Pause Feature</title>
+    <title>Neon Gauntlet – Fixed Buttons</title>
     <style>
         * { margin:0; padding:0; box-sizing:border-box; }
         body { background: #050510; display: flex; justify-content: center; align-items: center; min-height: 100vh; overflow: hidden; font-family: 'Courier New', monospace; touch-action: manipulation; }
@@ -43,7 +43,7 @@
             const STATE = { MENU:'menu', PLAYING:'playing', SHOP:'shop', BOSS:'boss', GAMEOVER:'gameover', LEADERBOARD:'leaderboard' };
             let gameState = STATE.MENU;
 
-            // --- Persistent data ---
+            // Persistent data
             let playerCoins = 0;
             let abilitiesData = {};
             let equippedAbilities = [];
@@ -75,7 +75,6 @@
                 { min:500, shape:'decagon',   color:'#ff00ff', glow:'#ff00ff', name:'GOD' }
             ];
 
-            // --- Run variables ---
             let score = 0, runCoins = 0;
             let speed = 5, baseSpeed = 5;
             let level = 1;
@@ -96,7 +95,7 @@
             let checkpointTimer = 0;
             let checkpointData = null;
 
-            let paused = false;   // new pause flag (only for PLAYING state)
+            let paused = false;
 
             let obstacles = [], coins = [];
             const OBS_W = 20, OBS_MIN_H = 24, OBS_MAX_H = 44;
@@ -135,7 +134,7 @@
             function stopMusic(){ musicActive=false; if(musicInterval){ clearTimeout(musicInterval); musicInterval=null; } }
             function scheduleNextBeat(){ if(!musicActive||!audioCtx) return; let bpm=120; if(gameState===STATE.PLAYING) bpm=120+speed*8; else if(gameState===STATE.BOSS) bpm=140+bossDodged*2; const interval=60000/bpm; playTone(60,0.1,'sine',0.15); if(Math.random()<0.5) playTone(800,0.05,'square',0.03); const noteBase=[262,294,330,349,392,440,494,523]; const noteIndex=(level-1)%noteBase.length; playTone(noteBase[noteIndex],0.12,'triangle',0.06); musicInterval=setTimeout(scheduleNextBeat,interval); }
 
-            // --- Data persistence ---
+            // Data persistence
             function loadData(){
                 try{
                     const d=JSON.parse(localStorage.getItem(SAVE_KEY));
@@ -190,13 +189,11 @@
                 return AVATARS[0];
             }
 
-            // --- Ability helpers ---
             function getAbilityLevel(key){ return abilitiesData[key]?.level || 0; }
             function getAbilityCooldown(key){ const d=ABILITY_DEFS[key]; const lvl=getAbilityLevel(key); return d.baseCooldown + (d.cooldownPerLevel * (lvl-1)); }
             function getAbilityDuration(key){ const d=ABILITY_DEFS[key]; const lvl=getAbilityLevel(key); return d.baseDuration + (d.durationPerLevel * (lvl-1)); }
             function getAbilityUpgradeCost(key){ const d=ABILITY_DEFS[key]; const lvl=getAbilityLevel(key); return d.baseCost + lvl * 10; }
 
-            // --- Checkpoint logic ---
             function setCheckpoint(){
                 checkpointData = {
                     score: score, speed: speed, baseSpeed: baseSpeed,
@@ -244,7 +241,7 @@
                 baseSpeed = 5; speed = 5; currentTheme = themes[0];
                 checkpointActive = false; checkpointTimer = 0; checkpointData = null;
                 abilityCooldowns = {}; activeEffects = {};
-                paused = false; // reset pause on new game
+                paused = false;
             }
 
             function getMaxClearableHeight(spd){ const peak = (JUMP_VEL * JUMP_VEL) / (2 * GRAVITY); return Math.floor(peak * Math.max(0.4, 1.0 - spd * 0.035) - 4); }
@@ -343,12 +340,7 @@
 
             function update(dtSec){
                 const factor = Math.min(dtSec / (1/60), 3.0);
-                // Cooldowns still tick? We'll skip if paused.
-                if (gameState === STATE.PLAYING && paused) {
-                    // still update stars and particles for visual effect? Better to freeze everything.
-                    // Only update particles? Let's just skip the whole update to truly pause.
-                    return;
-                }
+                if(gameState === STATE.PLAYING && paused) return;
 
                 for(let key in abilityCooldowns) if(abilityCooldowns[key] > 0) abilityCooldowns[key] -= dtSec;
                 for(let key in activeEffects) if(activeEffects[key] > 0) activeEffects[key] -= dtSec; else delete activeEffects[key];
@@ -558,14 +550,11 @@
                 ctx.shadowBlur=0;
                 for(let p of particles){ ctx.globalAlpha=p.life; ctx.fillStyle=p.color; ctx.shadowColor=p.color; ctx.shadowBlur=6; ctx.fillRect(p.x,p.y,p.size,p.size); } ctx.globalAlpha=1;
 
-                // Draw pause button if playing and not paused
                 if(gameState === STATE.PLAYING && !paused){
-                    // small pause icon top-left
                     ctx.fillStyle = 'rgba(0,0,0,0.5)';
                     ctx.fillRect(10, 10, 30, 30);
                     ctx.fillStyle = '#fff'; ctx.font = '20px "Courier New"'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
                     ctx.fillText('⏸', 25, 25);
-                    // add button area
                     buttons.push({ id:'pause', x:10, y:10, w:30, h:30 });
                 }
             }
@@ -575,7 +564,6 @@
                 ctx.fillRect(0,0,W,H);
                 ctx.font = 'bold 30px "Courier New"'; ctx.textAlign = 'center'; ctx.fillStyle = '#fff';
                 ctx.fillText('PAUSED', W/2, H/2-30);
-                // Resume button
                 drawButton(W/2-50, H/2, 100, 40, '#00cc44', 'RESUME');
                 buttons.push({ id:'resume', x:W/2-50, y:H/2, w:100, h:40 });
             }
@@ -597,6 +585,9 @@
             }
 
             function draw(){
+                // Clear buttons at the start of each draw cycle (the only safe place)
+                buttons = [];
+
                 const sx = shakeAmount ? (Math.random()-0.5)*shakeAmount : 0, sy = shakeAmount ? (Math.random()-0.5)*shakeAmount : 0;
                 ctx.save(); ctx.translate(sx,sy);
                 if(gameState===STATE.MENU) drawMenu();
@@ -666,16 +657,7 @@
 
             window.leaderboardTab = 'local';
             function handleInput(mx, my){
-                // Clear buttons array before filling (draw functions add buttons)
-                buttons = [];
-                if(gameState === STATE.PLAYING && paused){
-                    // In paused state, only resume button or tapping outside? We'll just check for resume button click.
-                    // We call drawGameOverlay() and drawPauseOverlay() which will add buttons.
-                } else if(gameState === STATE.PLAYING && !paused){
-                    // Pause button clickable
-                }
-
-                // Process clicks
+                // No clearing of buttons here — they are already populated from the last draw
                 if(gameState === STATE.MENU){
                     for(let b of buttons) if(mx >= b.x && mx <= b.x+b.w && my >= b.y && my <= b.y+b.h){
                         if(b.id === 'play'){ resetRun(); gameState = STATE.PLAYING; startMusic(); }
@@ -700,20 +682,19 @@
                     return;
                 } else if(gameState === STATE.PLAYING){
                     if(paused){
-                        // Check for resume button
                         for(let b of buttons) if(mx >= b.x && mx <= b.x+b.w && my >= b.y && my <= b.y+b.h && b.id === 'resume'){
                             paused = false;
                             startMusic();
                             return;
                         }
                     } else {
-                        // Check for pause button
+                        // Pause button
                         for(let b of buttons) if(mx >= b.x && mx <= b.x+b.w && my >= b.y && my <= b.y+b.h && b.id === 'pause'){
                             paused = true;
                             stopMusic();
                             return;
                         }
-                        // Normal jump input
+                        // Jump
                         if(player.grounded){ player.vy = JUMP_VEL; player.grounded = false; player.doubleJumpAvailable = true; }
                         else if(player.doubleJumpAvailable){ player.vy = DOUBLE_JUMP_VEL; player.doubleJumpAvailable = false; }
                         else if(extraJumpsActive){ player.vy = DOUBLE_JUMP_VEL; }
