@@ -202,7 +202,7 @@
                 PLAYER_H = 22;
             const PLAYER_X = 70;
             const FIXED_DT = 1 / 60;
-            const LEVEL_SPEED_BOOST = 1.5;
+            const LEVEL_SPEED_BOOST = 1.5; // no longer used for base speed, kept for reference
             const GRAVITY = 0.55;
             const JUMP_VEL = -9.2;
             const DOUBLE_JUMP_VEL = -6.5;
@@ -389,7 +389,7 @@
                 baseSpeed: 5,
                 spawnDelayMult: 1.0,
                 scorePerLevel: 15,
-                speedIncPerScore: 0.01,
+                speedIncPerScore: 0.01, // no longer used
                 checkpointInterval: 250
             };
 
@@ -720,17 +720,17 @@
             function startRun(mode) {
                 switch (mode) {
                     case 'normal':
-                        diffConfig = { baseSpeed: 5, spawnDelayMult: 1.0, scorePerLevel: 15, speedIncPerScore: 0.01,
+                        diffConfig = { baseSpeed: 5, spawnDelayMult: 1.0, scorePerLevel: 15, speedIncPerScore: 0,
                             checkpointInterval: 250 };
                         gameState = STATE.PLAYING;
                         break;
                     case 'hard':
-                        diffConfig = { baseSpeed: 7, spawnDelayMult: 0.85, scorePerLevel: 12, speedIncPerScore: 0.012,
+                        diffConfig = { baseSpeed: 5, spawnDelayMult: 0.85, scorePerLevel: 12, speedIncPerScore: 0,
                             checkpointInterval: 300 };
                         gameState = STATE.HARD;
                         break;
                     case 'insane':
-                        diffConfig = { baseSpeed: 9, spawnDelayMult: 0.7, scorePerLevel: 10, speedIncPerScore: 0.015,
+                        diffConfig = { baseSpeed: 5, spawnDelayMult: 0.7, scorePerLevel: 10, speedIncPerScore: 0,
                             checkpointInterval: 400 };
                         gameState = STATE.INSANE;
                         break;
@@ -778,8 +778,9 @@
             function advanceLevel() {
                 level++;
                 if (gameState === STATE.HARD) setGravityDir(gravityDir * -1);
-                baseSpeed = Math.min(diffConfig.baseSpeed + (level - 1) * 1.5, 25);
-                speed = baseSpeed;
+                // --- FIX: no longer increase baseSpeed per level ---
+                // baseSpeed = Math.min(diffConfig.baseSpeed + (level - 1) * 1.5, 25);
+                // speed = baseSpeed;   // speed stays constant
                 scoreThisLevel = 0;
                 currentTheme = themes[(level - 1) % themes.length];
                 shakeAmount = 6;
@@ -1130,9 +1131,10 @@
                                 totalCoinsCollected++;
                                 increaseCombo(); if (comboCount > 0 && comboCount % 10 === 0) { score += comboCount;
                                     runCoins += Math.floor(comboCount / 5); }
-                                const maxSpeed = baseSpeed + (LEVEL_SPEED_BOOST * (level - 1));
-                                speed = Math.min(maxSpeed, baseSpeed + scoreThisLevel * diffConfig.speedIncPerScore); if (
-                                    scoreThisLevel >= diffConfig.scorePerLevel) advanceLevel(); if (score > 0 && score %
+                                // --- FIX: no longer increase speed from scoring ---
+                                // const maxSpeed = baseSpeed + (LEVEL_SPEED_BOOST * (level - 1));
+                                // speed = Math.min(maxSpeed, baseSpeed + scoreThisLevel * diffConfig.speedIncPerScore);
+                                if (scoreThisLevel >= diffConfig.scorePerLevel) advanceLevel(); if (score > 0 && score %
                                     checkpointInterval === 0 && !checkpointActive) setCheckpoint(); }
                             if (checkCollision(player, o)) { if (checkpointActive || (activeEffects['shield'] && activeEffects[
                                     'shield'] > 0)) { obstacles.splice(i, 1);
@@ -1232,7 +1234,6 @@
 
             function drawScrollableContainer(contentDrawFn) {
                 ctx.save();
-                // Clip to scrollable area (below header)
                 const headerH = 75;
                 ctx.beginPath();
                 ctx.rect(0, headerH, W, H - headerH);
@@ -1252,10 +1253,8 @@
                 ctx.fillStyle = bg;
                 ctx.fillRect(0, 0, W, H);
 
-                // Calculate total content height for scroll
                 const totalContentH = bossDefeated ? 345 : 320;
-                maxScrollY = Math.max(0, totalContentH - H + 40);
-                isScrollableScreen = true;
+                setScrollableScreen(totalContentH - H + 40);  // FIX: reset scroll position
 
                 drawFixedHeader('NEON GAUNTLET', `Coins: ${playerCoins}  |  Best: ${highScore}`);
 
@@ -1278,8 +1277,6 @@
                         drawButton(W / 2 - 70, 315, 140, 25, boss2Defeated ? '#666' : '#f0f', b2Label);
                     }
                 });
-
-                // Fixed settings button top-right (not affected by scroll)
                 drawButton(W - 50, 8, 42, 22, '#555', '⚙');
             }
 
@@ -1291,15 +1288,15 @@
                 ctx.fillStyle = bg;
                 ctx.fillRect(0, 0, W, H);
 
-                // Calculate total content height
                 let contentH = 75;
                 for (let key in ABILITY_DEFS) contentH += 40;
                 if (abilitySlots < 3) contentH += 40;
                 contentH += 45;
-                maxScrollY = Math.max(0, contentH - H + 40);
-                isScrollableScreen = true;
+                setScrollableScreen(contentH - H + 40);  // FIX: reset scroll position
 
                 drawFixedHeader('SHOP', `Coins: ${playerCoins} | Slots: ${abilitySlots} | Equipped: ${equippedAbilities.length}/${abilitySlots}`);
+                // FIX: fixed back button
+                drawButton(W - 55, 5, 45, 22, '#444', 'BACK');
 
                 drawScrollableContainer(() => {
                     let y = 80;
@@ -1335,7 +1332,6 @@
                         drawButton(W / 2 - 40, y + 16, 80, 22, '#fd0', 'BUY SLOT');
                         y += 40;
                     }
-                    drawButton(W / 2 - 40, y + 5, 80, 28, '#444', 'BACK');
                 });
             }
 
@@ -1385,7 +1381,6 @@
                 ctx.fillStyle = '#fff';
                 ctx.fillText('SETTINGS', W / 2, 35);
 
-                // Character selection
                 const av = getAvatarObj();
                 const unlocked = unlockedCharacters.filter(id => AVATARS.find(a => a.id === id));
                 const currentIdx = unlocked.indexOf(activeCharacter);
@@ -1401,21 +1396,16 @@
                 ctx.shadowBlur = 0;
                 drawButton(W / 2 + 40, 72, 60, 28, '#555', 'NEXT ►');
 
-                // Mute toggle
                 drawButton(W / 2 - 60, 115, 120, 30, muted ? '#f44' : '#0c4', muted ? '🔇 MUTED' : '🔊 UNMUTED');
 
-                // Stats
                 ctx.font = '11px';
                 ctx.fillStyle = '#888';
                 ctx.fillText(`Deaths: ${totalDeaths}  |  Jumps: ${totalJumps}  |  Coins: ${totalCoinsCollected}`, W / 2, 168);
 
-                // Reset
                 drawButton(W / 2 - 60, 190, 120, 32, '#a00', 'RESET ALL DATA');
 
-                // Back
                 drawButton(W / 2 - 40, 240, 80, 32, '#444', 'BACK');
 
-                // Reset confirmation
                 if (window._resetConfirm) {
                     ctx.fillStyle = 'rgba(0,0,0,0.85)';
                     ctx.fillRect(0, 0, W, H);
@@ -1514,7 +1504,6 @@
                     ctx.arc(s.x, s.y, s.radius, 0, Math.PI * 2);
                     ctx.fill(); }
                 ctx.shadowBlur = 0;
-                // Weather particles
                 if (weatherType === 'rain') { ctx.fillStyle = '#88f'; for (let wp of weatherParticles) { ctx.globalAlpha = wp
                             .life * 0.8;
                         ctx.fillRect(wp.x, wp.y, 1, 8); }
@@ -1524,7 +1513,6 @@
                         ctx.arc(wp.x, wp.y, 2, 0, Math.PI * 2);
                         ctx.fill(); }
                     ctx.globalAlpha = 1; }
-                // Speed lines
                 ctx.strokeStyle = 'rgba(255,255,255,0.2)';
                 ctx.lineWidth = 1.5;
                 for (let l of speedLines) { ctx.globalAlpha = l.life * 0.7;
@@ -1533,7 +1521,6 @@
                     ctx.lineTo(l.x + l.length, l.y);
                     ctx.stroke(); }
                 ctx.globalAlpha = 1;
-                // Ground
                 ctx.beginPath();
                 ctx.strokeStyle = currentTheme.ground;
                 ctx.lineWidth = 2;
@@ -1547,13 +1534,11 @@
                     ctx.lineTo(x + dash, groundSurfaceY); }
                 ctx.stroke();
                 ctx.shadowBlur = 0;
-                // Platforms
                 ctx.fillStyle = '#fff';
                 for (let p of platforms) { ctx.shadowColor = '#fff';
                     ctx.shadowBlur = 6;
                     ctx.fillRect(p.x, p.y, p.width, p.height); }
                 ctx.shadowBlur = 0;
-                // Obstacles
                 const obsArray = gameState === STATE.BOSS ? bossObstacles : (gameState === STATE.BOSS2 ? boss2Obstacles :
                     obstacles);
                 for (let o of obsArray) { ctx.fillStyle = gameState === STATE.BOSS || gameState === STATE.BOSS2 ? '#f80' :
@@ -1564,7 +1549,6 @@
                         ctx.arc(o.x + o.width / 2, o.y + o.height / 2, o.width / 2, 0, Math.PI * 2);
                         ctx.fill(); } else ctx.fillRect(o.x, o.y, o.width, o.height); }
                 ctx.shadowBlur = 0;
-                // Coins
                 if (gameState !== STATE.BOSS && gameState !== STATE.BOSS2) { for (let c of coins) { let bob = Math.sin(
                             performance.now() / 200 + c.bobPhase) * 2;
                         ctx.fillStyle = '#fd0';
@@ -1573,13 +1557,11 @@
                         ctx.beginPath();
                         ctx.arc(c.x + c.width / 2, c.y + c.height / 2 + bob, c.width / 2, 0, Math.PI * 2);
                         ctx.fill(); } }
-                // Power-ups
                 for (let pu of powerUps) { ctx.fillStyle = pu.type === 'speed' ? '#0f0' : pu.type === 'invincible' ? '#f0f' :
                         pu.type === 'magnet' ? '#ff0' : '#fd0';
                     ctx.shadowColor = ctx.fillStyle;
                     ctx.shadowBlur = 8;
                     ctx.fillRect(pu.x, pu.y, pu.width, pu.height); }
-                // Boss entities
                 if (gameState === STATE.BOSS) { const bx = bossEntity.x + (Math.random() - 0.5) * bossEntity.vibrate,
                         by = bossEntity.y + (Math.random() - 0.5) * bossEntity.vibrate;
                     ctx.fillStyle = '#f33';
@@ -1592,7 +1574,6 @@
                     ctx.shadowColor = '#f0f';
                     ctx.shadowBlur = 20;
                     ctx.fillRect(bx, by, boss2Entity.width, boss2Entity.height); }
-                // Player
                 drawPlayerShape();
                 if (!player.grounded && (player.doubleJumpAvailable || extraJumpsActive)) { ctx.fillStyle = '#fff';
                     ctx.shadowColor = '#fff';
@@ -1600,14 +1581,12 @@
                     ctx.beginPath();
                     ctx.arc(player.x + player.width / 2, player.y - 8, 3, 0, Math.PI * 2);
                     ctx.fill(); }
-                // Particles
                 for (let p of particles) { ctx.globalAlpha = p.life;
                     ctx.fillStyle = p.color;
                     ctx.shadowColor = p.color;
                     ctx.shadowBlur = 6;
                     ctx.fillRect(p.x, p.y, p.size, p.size); }
                 ctx.globalAlpha = 1;
-                // Pause button
                 if ((gameState === STATE.PLAYING || gameState === STATE.HARD || gameState === STATE.INSANE) && !paused) { ctx
                         .fillStyle = 'rgba(0,0,0,0.5)';
                     ctx.fillRect(W - 45, 10, 35, 35);
@@ -1724,13 +1703,11 @@
                 player.height = SLIDE_HEIGHT;
                 sfxSlide(); }
 
-            // Mouse click
             canvas.addEventListener('mousedown', e => {
                 const c = getCanvasCoords(e);
                 handleCanvasClick(c.x, c.y);
             });
 
-            // Touch events with scroll support
             canvas.addEventListener('touchstart', e => {
                 e.preventDefault();
                 const t = e.touches[0];
@@ -1762,8 +1739,6 @@
             canvas.addEventListener('touchend', e => {
                 e.preventDefault();
                 if (!touchMoved && !touchDragging) {
-                    const c = getCanvasCoords({ clientX: touchStartX, clientY: touchStartY });
-                    // Need to map back: we stored touchStartX/Y from getCanvasCoords
                     handleCanvasClick(touchStartX, touchStartY);
                 }
                 touchDragging = false;
@@ -1771,7 +1746,6 @@
                 targetScrollY = scrollY;
             }, { passive: false });
 
-            // Wheel scroll
             canvas.addEventListener('wheel', e => {
                 if (!isScrollableScreen) return;
                 e.preventDefault();
@@ -1780,7 +1754,6 @@
                 updateScrollIndicators();
             }, { passive: false });
 
-            // Button handlers
             jumpBtn.addEventListener('mousedown', e => { e.stopPropagation();
                 performJump(); });
             jumpBtn.addEventListener('touchstart', e => { e.stopPropagation();
@@ -1873,6 +1846,8 @@
                 }
                 if (gameState === STATE.SHOP) {
                     const btns = [];
+                    // FIX: fixed back button (outside scroll)
+                    btns.push({ id: 'back', x: W - 55, y: 5, w: 45, h: 22 });
                     let y = 80;
                     for (let key in ABILITY_DEFS) {
                         const lvl = getAbilityLevel(key),
@@ -1889,7 +1864,6 @@
                         y += 40;
                     }
                     if (abilitySlots < 3) btns.push({ id: 'buy_slot', x: W / 2 - 40, y: y + 16 - scrollY, w: 80, h: 22 });
-                    btns.push({ id: 'back', x: W / 2 - 40, y: y + 45 - scrollY, w: 80, h: 28 });
                     return btns;
                 }
                 if (gameState === STATE.LEADERBOARD) return [{ id: 'tab_local', x: W / 2 - 100, y: 50, w: 100, h: 25 },
@@ -1917,8 +1891,7 @@
                 else if (id === 'hard') startRun('hard');
                 else if (id === 'insane') startRun('insane');
                 else if (id === 'shop') { gameState = STATE.SHOP;
-                    stopMusic();
-                    setScrollableScreen(460); } else if (id === 'leaderboard') { gameState = STATE.LEADERBOARD;
+                    stopMusic(); } else if (id === 'leaderboard') { gameState = STATE.LEADERBOARD;
                     stopMusic();
                     clearScrollableScreen(); } else if (id === 'boss' && !bossDefeated) startBoss(false);
                 else if (id === 'boss2' && bossDefeated && !boss2Defeated) startBoss2();
@@ -1962,6 +1935,9 @@
 
             // ==================== INIT ====================
             loadData();
+            // FIX: clear boss retry on reload to prevent broken state
+            if (bossAttemptRemaining) { bossAttemptRemaining = false;
+                saveData(); }
             loadLeaderboard();
             loadSharedScores();
             checkURLForScore();
