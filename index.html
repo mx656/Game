@@ -202,7 +202,6 @@
                 PLAYER_H = 22;
             const PLAYER_X = 70;
             const FIXED_DT = 1 / 60;
-            const LEVEL_SPEED_BOOST = 1.5; // no longer used for base speed, kept for reference
             const GRAVITY = 0.55;
             const JUMP_VEL = -9.2;
             const DOUBLE_JUMP_VEL = -6.5;
@@ -389,7 +388,7 @@
                 baseSpeed: 5,
                 spawnDelayMult: 1.0,
                 scorePerLevel: 15,
-                speedIncPerScore: 0.01, // no longer used
+                speedIncPerScore: 0, // removed, speed now only increases per level
                 checkpointInterval: 250
             };
 
@@ -778,9 +777,9 @@
             function advanceLevel() {
                 level++;
                 if (gameState === STATE.HARD) setGravityDir(gravityDir * -1);
-                // --- FIX: no longer increase baseSpeed per level ---
-                // baseSpeed = Math.min(diffConfig.baseSpeed + (level - 1) * 1.5, 25);
-                // speed = baseSpeed;   // speed stays constant
+                // Speed increases per level, using the base speed of the current mode (all modes start at 5)
+                baseSpeed = Math.min(diffConfig.baseSpeed + (level - 1) * 1.5, 25);
+                speed = baseSpeed;
                 scoreThisLevel = 0;
                 currentTheme = themes[(level - 1) % themes.length];
                 shakeAmount = 6;
@@ -1131,9 +1130,6 @@
                                 totalCoinsCollected++;
                                 increaseCombo(); if (comboCount > 0 && comboCount % 10 === 0) { score += comboCount;
                                     runCoins += Math.floor(comboCount / 5); }
-                                // --- FIX: no longer increase speed from scoring ---
-                                // const maxSpeed = baseSpeed + (LEVEL_SPEED_BOOST * (level - 1));
-                                // speed = Math.min(maxSpeed, baseSpeed + scoreThisLevel * diffConfig.speedIncPerScore);
                                 if (scoreThisLevel >= diffConfig.scorePerLevel) advanceLevel(); if (score > 0 && score %
                                     checkpointInterval === 0 && !checkpointActive) setCheckpoint(); }
                             if (checkCollision(player, o)) { if (checkpointActive || (activeEffects['shield'] && activeEffects[
@@ -1254,7 +1250,7 @@
                 ctx.fillRect(0, 0, W, H);
 
                 const totalContentH = bossDefeated ? 345 : 320;
-                setScrollableScreen(totalContentH - H + 40);  // FIX: reset scroll position
+                setScrollableScreen(totalContentH - H + 40);
 
                 drawFixedHeader('NEON GAUNTLET', `Coins: ${playerCoins}  |  Best: ${highScore}`);
 
@@ -1292,11 +1288,10 @@
                 for (let key in ABILITY_DEFS) contentH += 40;
                 if (abilitySlots < 3) contentH += 40;
                 contentH += 45;
-                setScrollableScreen(contentH - H + 40);  // FIX: reset scroll position
+                setScrollableScreen(contentH - H + 40);
 
                 drawFixedHeader('SHOP', `Coins: ${playerCoins} | Slots: ${abilitySlots} | Equipped: ${equippedAbilities.length}/${abilitySlots}`);
-                // FIX: fixed back button
-                drawButton(W - 55, 5, 45, 22, '#444', 'BACK');
+                drawButton(W - 55, 5, 45, 22, '#444', 'BACK');  // Fixed back button
 
                 drawScrollableContainer(() => {
                     let y = 80;
@@ -1676,44 +1671,27 @@
                 muteBtn.textContent = muted ? '🔇' : '🔊';
             }
 
-            // ==================== INPUT ====================
-            function getCanvasCoords(e) { const r = canvas.getBoundingClientRect(); return { x: (e.clientX - r.left) * W / r
-                        .width, y: (e.clientY - r.top) * H / r.height }; }
+            // ==================== INPUT (unified touch on canvas) ====================
+            function getCanvasCoords(e) { const r = canvas.getBoundingClientRect(); return { x: (e.clientX - r.left) * W / r.width, y: (e.clientY - r.top) * H / r.height }; }
 
             function performJump() {
-                if ((gameState !== STATE.PLAYING && gameState !== STATE.HARD && gameState !== STATE.INSANE && gameState !==
-                        STATE.BOSS && gameState !== STATE.BOSS2) || paused) return;
+                if ((gameState !== STATE.PLAYING && gameState !== STATE.HARD && gameState !== STATE.INSANE && gameState !== STATE.BOSS && gameState !== STATE.BOSS2) || paused) return;
                 totalJumps++;
-                if (player.grounded) { player.vy = JUMP_VEL * gravityDir;
-                    player.grounded = false;
-                    player.doubleJumpAvailable = true;
-                    sfxJump(); } else if (player.doubleJumpAvailable) { if (gameState === STATE.INSANE) { setGravityDir(
-                            gravityDir * -1);
-                        player.vy = DOUBLE_JUMP_VEL * gravityDir; } else player.vy = DOUBLE_JUMP_VEL * gravityDir;
-                    player.doubleJumpAvailable = false;
-                    sfxJump(); } else if (extraJumpsActive) { if (gameState === STATE.INSANE) { setGravityDir(gravityDir *
-                            -1);
-                        player.vy = DOUBLE_JUMP_VEL * gravityDir; } else player.vy = DOUBLE_JUMP_VEL * gravityDir;
-                    sfxJump(); }
+                if (player.grounded) { player.vy = JUMP_VEL * gravityDir; player.grounded = false; player.doubleJumpAvailable = true; sfxJump(); }
+                else if (player.doubleJumpAvailable) { if (gameState === STATE.INSANE) { setGravityDir(gravityDir * -1); player.vy = DOUBLE_JUMP_VEL * gravityDir; } else player.vy = DOUBLE_JUMP_VEL * gravityDir; player.doubleJumpAvailable = false; sfxJump(); }
+                else if (extraJumpsActive) { if (gameState === STATE.INSANE) { setGravityDir(gravityDir * -1); player.vy = DOUBLE_JUMP_VEL * gravityDir; } else player.vy = DOUBLE_JUMP_VEL * gravityDir; sfxJump(); }
             }
 
-            function performSlide() { if (!player.grounded || isSliding) return;
-                isSliding = true;
-                slideTimer = SLIDE_DURATION;
-                player.height = SLIDE_HEIGHT;
-                sfxSlide(); }
+            function performSlide() { if (!player.grounded || isSliding) return; isSliding = true; slideTimer = SLIDE_DURATION; player.height = SLIDE_HEIGHT; sfxSlide(); }
 
-            canvas.addEventListener('mousedown', e => {
-                const c = getCanvasCoords(e);
-                handleCanvasClick(c.x, c.y);
-            });
-
+            let lastTouchStart = null;
             canvas.addEventListener('touchstart', e => {
                 e.preventDefault();
                 const t = e.touches[0];
                 const c = getCanvasCoords(t);
                 touchStartX = c.x;
                 touchStartY = c.y;
+                lastTouchStart = { x: c.x, y: c.y };
                 touchMoved = false;
                 touchDragging = false;
             }, { passive: false });
@@ -1738,13 +1716,18 @@
 
             canvas.addEventListener('touchend', e => {
                 e.preventDefault();
-                if (!touchMoved && !touchDragging) {
-                    handleCanvasClick(touchStartX, touchStartY);
+                if (!touchMoved && !touchDragging && lastTouchStart) {
+                    handleCanvasClick(lastTouchStart.x, lastTouchStart.y);
                 }
                 touchDragging = false;
                 touchMoved = false;
                 targetScrollY = scrollY;
             }, { passive: false });
+
+            canvas.addEventListener('mousedown', e => {
+                const c = getCanvasCoords(e);
+                handleCanvasClick(c.x, c.y);
+            });
 
             canvas.addEventListener('wheel', e => {
                 if (!isScrollableScreen) return;
@@ -1754,59 +1737,74 @@
                 updateScrollIndicators();
             }, { passive: false });
 
-            jumpBtn.addEventListener('mousedown', e => { e.stopPropagation();
-                performJump(); });
-            jumpBtn.addEventListener('touchstart', e => { e.stopPropagation();
-                performJump(); });
-            abilityBtn.addEventListener('mousedown', e => { e.stopPropagation();
-                activateEquippedAbility(); });
-            abilityBtn.addEventListener('touchstart', e => { e.stopPropagation();
-                activateEquippedAbility(); });
-            slideBtn.addEventListener('mousedown', e => { e.stopPropagation();
-                performSlide(); });
-            slideBtn.addEventListener('touchstart', e => { e.stopPropagation();
-                performSlide(); });
-            muteBtn.addEventListener('click', () => { muted = !muted;
-                saveData(); if (muted) stopMusic(); else if (gameState === STATE.PLAYING || gameState === STATE.HARD ||
-                    gameState === STATE.INSANE || gameState === STATE.BOSS || gameState === STATE.BOSS2) startMusic(); });
-            shareBtn.addEventListener('click', () => { if (gameState === STATE.GAMEOVER && score > 0) { const url = new URL(
-                        window.location.href);
-                    url.searchParams.set('score', score);
-                    const str = url.toString(); if (navigator.share) navigator.share({ title: 'Neon Gauntlet Score',
-                        text: `I scored ${score}!`, url: str }); else { navigator.clipboard.writeText(str).then(() =>
-                        alert('Score link copied!')); } } });
+            // Mute button (separate, doesn't interfere)
+            muteBtn.addEventListener('click', () => { muted = !muted; saveData(); if (muted) stopMusic(); else if (gameState === STATE.PLAYING || gameState === STATE.HARD || gameState === STATE.INSANE || gameState === STATE.BOSS || gameState === STATE.BOSS2) startMusic(); });
+
+            shareBtn.addEventListener('click', () => { if (gameState === STATE.GAMEOVER && score > 0) { const url = new URL(window.location.href); url.searchParams.set('score', score); const str = url.toString(); if (navigator.share) navigator.share({ title: 'Neon Gauntlet Score', text: `I scored ${score}!`, url: str }); else { navigator.clipboard.writeText(str).then(() => alert('Score link copied!')); } } });
 
             document.addEventListener('keydown', e => {
-                if (e.code === 'Space' || e.key === ' ') { e.preventDefault(); if (gameState === STATE.GAMEOVER) {
-                        gameState = STATE.MENU;
-                        stopMusic();
-                        clearScrollableScreen(); } else performJump(); }
-                if (e.code === 'KeyE' && !paused) { e.preventDefault();
-                    activateEquippedAbility(); }
-                if ((e.code === 'KeyP' || e.code === 'Escape') && (gameState === STATE.PLAYING || gameState === STATE.HARD ||
-                        gameState === STATE.INSANE)) { e.preventDefault();
-                    paused = !paused; if (paused) stopMusic();
-                    else startMusic(); }
-                if (e.code === 'KeyS' || e.key === 's') { e.preventDefault();
-                    performSlide(); }
+                if (e.code === 'Space' || e.key === ' ') { e.preventDefault(); if (gameState === STATE.GAMEOVER) { gameState = STATE.MENU; stopMusic(); clearScrollableScreen(); } else performJump(); }
+                if (e.code === 'KeyE' && !paused) { e.preventDefault(); activateEquippedAbility(); }
+                if ((e.code === 'KeyP' || e.code === 'Escape') && (gameState === STATE.PLAYING || gameState === STATE.HARD || gameState === STATE.INSANE)) { e.preventDefault(); paused = !paused; if (paused) stopMusic(); else startMusic(); }
+                if (e.code === 'KeyS' || e.key === 's') { e.preventDefault(); performSlide(); }
             });
 
-            function activateEquippedAbility() { if (equippedAbilities.length === 0) return; for (let key of equippedAbilities)
-                    if (!abilityCooldowns[key] || abilityCooldowns[key] <= 0) { activateAbility(key); return; } }
+            function activateEquippedAbility() { if (equippedAbilities.length === 0) return; for (let key of equippedAbilities) if (!abilityCooldowns[key] || abilityCooldowns[key] <= 0) { activateAbility(key); return; } }
             window.leaderboardTab = 'local';
 
             function handleCanvasClick(mx, my) {
+                // Check playable buttons first (areas defined by button positions)
                 const isPlay = gameState === STATE.PLAYING || gameState === STATE.HARD || gameState === STATE.INSANE;
-                if (isPlay && !paused && mx >= W - 45 && mx <= W - 10 && my >= 10 && my <= 45) { paused = true;
-                    stopMusic(); return; }
-                if (isPlay && paused) { if (mx >= W / 2 - 60 && mx <= W / 2 + 60 && my >= H / 2 && my <= H / 2 + 45) { paused =
-                            false;
-                        startMusic(); return; }
-                    paused = false;
-                    startMusic(); return; }
-                if (gameState === STATE.GAMEOVER) { gameState = STATE.MENU;
+                const isBoss = gameState === STATE.BOSS || gameState === STATE.BOSS2;
+                const gameActive = (isPlay && !paused) || isBoss;
+
+                if (gameActive) {
+                    // Check jump button area (bottom-left)
+                    const jRect = jumpBtn.getBoundingClientRect();
+                    if (mx >= jRect.left && mx <= jRect.right && my >= jRect.top && my <= jRect.bottom) {
+                        performJump();
+                        return;
+                    }
+                    // Ability button area (bottom-right)
+                    const aRect = abilityBtn.getBoundingClientRect();
+                    if (mx >= aRect.left && mx <= aRect.right && my >= aRect.top && my <= aRect.bottom) {
+                        activateEquippedAbility();
+                        return;
+                    }
+                    // Slide button (only during runs)
+                    if (isPlay && !paused) {
+                        const sRect = slideBtn.getBoundingClientRect();
+                        if (mx >= sRect.left && mx <= sRect.right && my >= sRect.top && my <= sRect.bottom) {
+                            performSlide();
+                            return;
+                        }
+                    }
+                    // Pause button (top-right canvas area)
+                    if (isPlay && !paused && mx >= W - 45 && mx <= W - 10 && my >= 10 && my <= 45) {
+                        paused = true;
+                        stopMusic();
+                        return;
+                    }
+                    if (isPlay && paused) {
+                        if (mx >= W / 2 - 60 && mx <= W / 2 + 60 && my >= H / 2 && my <= H / 2 + 45) {
+                            paused = false;
+                            startMusic();
+                            return;
+                        }
+                        paused = false;
+                        startMusic();
+                        return;
+                    }
+                    performJump();
+                    return;
+                }
+
+                if (gameState === STATE.GAMEOVER) {
+                    gameState = STATE.MENU;
                     stopMusic();
-                    clearScrollableScreen(); return; }
+                    clearScrollableScreen();
+                    return;
+                }
                 if (gameState === STATE.SETTINGS && window._resetConfirm) {
                     if (mx >= W / 2 - 100 && mx <= W / 2 - 10 && my >= H / 2 + 20 && my <= H / 2 + 52) {
                         resetAll();
@@ -1824,6 +1822,7 @@
                     window._resetConfirm = false;
                     return;
                 }
+
                 const btns = getCurrentButtons();
                 for (let b of btns)
                     if (mx >= b.x && mx <= b.x + b.w && my >= b.y && my <= b.y + b.h) { handleButton(b.id); return; }
@@ -1846,8 +1845,7 @@
                 }
                 if (gameState === STATE.SHOP) {
                     const btns = [];
-                    // FIX: fixed back button (outside scroll)
-                    btns.push({ id: 'back', x: W - 55, y: 5, w: 45, h: 22 });
+                    btns.push({ id: 'back', x: W - 55, y: 5, w: 45, h: 22 }); // fixed back
                     let y = 80;
                     for (let key in ABILITY_DEFS) {
                         const lvl = getAbilityLevel(key),
@@ -1855,20 +1853,15 @@
                             equipped = equippedAbilities.includes(key);
                         const canUpgrade = owned && lvl + 1 <= ABILITY_DEFS[key].maxLevel;
                         if (!owned) btns.push({ id: 'buy_' + key, x: W / 2 - 40, y: y + 14 - scrollY, w: 80, h: 20 });
-                        else if (canUpgrade) btns.push({ id: 'upgrade_' + key, x: W / 2 - 40, y: y + 14 - scrollY, w: 80,
-                            h: 20 });
-                        if (owned && !equipped && equippedAbilities.length < abilitySlots) btns.push({ id: 'equip_' + key,
-                            x: W / 2 + 40, y: y + 14 - scrollY, w: 80, h: 20 });
-                        else if (equipped) btns.push({ id: 'unequip_' + key, x: W / 2 + 40, y: y + 14 - scrollY, w: 80,
-                        h: 20 });
+                        else if (canUpgrade) btns.push({ id: 'upgrade_' + key, x: W / 2 - 40, y: y + 14 - scrollY, w: 80, h: 20 });
+                        if (owned && !equipped && equippedAbilities.length < abilitySlots) btns.push({ id: 'equip_' + key, x: W / 2 + 40, y: y + 14 - scrollY, w: 80, h: 20 });
+                        else if (equipped) btns.push({ id: 'unequip_' + key, x: W / 2 + 40, y: y + 14 - scrollY, w: 80, h: 20 });
                         y += 40;
                     }
                     if (abilitySlots < 3) btns.push({ id: 'buy_slot', x: W / 2 - 40, y: y + 16 - scrollY, w: 80, h: 22 });
                     return btns;
                 }
-                if (gameState === STATE.LEADERBOARD) return [{ id: 'tab_local', x: W / 2 - 100, y: 50, w: 100, h: 25 },
-                    { id: 'tab_global', x: W / 2, y: 50, w: 100, h: 25 }, { id: 'back', x: 20, y: H - 45, w: 80, h: 30 }
-                ];
+                if (gameState === STATE.LEADERBOARD) return [{ id: 'tab_local', x: W / 2 - 100, y: 50, w: 100, h: 25 }, { id: 'tab_global', x: W / 2, y: 50, w: 100, h: 25 }, { id: 'back', x: 20, y: H - 45, w: 80, h: 30 }];
                 if (gameState === STATE.SETTINGS) {
                     const btns = [
                         { id: 'prev_char', x: W / 2 - 100, y: 72, w: 60, h: 28 },
@@ -1890,59 +1883,34 @@
                 if (id === 'normal') startRun('normal');
                 else if (id === 'hard') startRun('hard');
                 else if (id === 'insane') startRun('insane');
-                else if (id === 'shop') { gameState = STATE.SHOP;
-                    stopMusic(); } else if (id === 'leaderboard') { gameState = STATE.LEADERBOARD;
-                    stopMusic();
-                    clearScrollableScreen(); } else if (id === 'boss' && !bossDefeated) startBoss(false);
+                else if (id === 'shop') { gameState = STATE.SHOP; stopMusic(); }
+                else if (id === 'leaderboard') { gameState = STATE.LEADERBOARD; stopMusic(); clearScrollableScreen(); }
+                else if (id === 'boss' && !bossDefeated) startBoss(false);
                 else if (id === 'boss2' && bossDefeated && !boss2Defeated) startBoss2();
-                else if (id === 'settings') { gameState = STATE.SETTINGS;
-                    stopMusic();
-                    clearScrollableScreen();
-                    window._resetConfirm = false; } else if (id === 'back') { gameState = STATE.MENU;
-                    saveData();
-                    clearScrollableScreen(); } else if (id === 'tab_local') { window.leaderboardTab = 'local';
-                    gameState = STATE.LEADERBOARD; } else if (id === 'tab_global') { window.leaderboardTab = 'global';
-                    gameState = STATE.LEADERBOARD; } else if (id === 'buy_slot' && abilitySlots < 3) { const cost = 50 +
-                        abilitySlots * 30; if (playerCoins >= cost) { playerCoins -= cost;
-                        abilitySlots++;
-                        saveData(); } } else if (id.startsWith('buy_')) { const k = id.substring(4); if (!abilitiesData[k]
-                        ?.level && playerCoins >= ABILITY_DEFS[k].baseCost) { playerCoins -= ABILITY_DEFS[k].baseCost;
-                        abilitiesData[k] = { level: 1 };
-                        saveData(); } } else if (id.startsWith('upgrade_')) { const k = id.substring(8); if (getAbilityLevel(
-                            k) < ABILITY_DEFS[k].maxLevel && playerCoins >= getAbilityUpgradeCost(k)) { playerCoins -=
-                            getAbilityUpgradeCost(k);
-                        abilitiesData[k].level++;
-                        saveData(); } } else if (id.startsWith('equip_')) { const k = id.substring(6); if (!equippedAbilities
-                        .includes(k) && equippedAbilities.length < abilitySlots) { equippedAbilities.push(k);
-                        saveData(); } } else if (id.startsWith('unequip_')) { const k = id.substring(8);
-                    equippedAbilities = equippedAbilities.filter(a => a !== k);
-                    saveData(); } else if (id === 'prev_char') { const unlocked = unlockedCharacters.filter(id => AVATARS.find(
-                        a => a.id === id));
-                    const idx = unlocked.indexOf(activeCharacter); if (idx > 0) { activeCharacter = unlocked[idx - 1];
-                        saveData(); } } else if (id === 'next_char') { const unlocked = unlockedCharacters.filter(id => AVATARS
-                        .find(a => a.id === id));
-                    const idx = unlocked.indexOf(activeCharacter); if (idx < unlocked.length - 1) { activeCharacter =
-                            unlocked[idx + 1];
-                        saveData(); } } else if (id === 'toggle_mute') { muted = !muted;
-                    saveData(); if (muted) stopMusic(); } else if (id === 'reset_data') { window._resetConfirm = true; } else if (
-                    id === 'confirm_reset') { resetAll();
-                    loadData();
-                    window._resetConfirm = false;
-                    gameState = STATE.MENU;
-                    clearScrollableScreen();
-                    showMessage('All data reset!', 2); } else if (id === 'cancel_reset') { window._resetConfirm = false; }
+                else if (id === 'settings') { gameState = STATE.SETTINGS; stopMusic(); clearScrollableScreen(); window._resetConfirm = false; }
+                else if (id === 'back') { gameState = STATE.MENU; saveData(); clearScrollableScreen(); }
+                else if (id === 'tab_local') { window.leaderboardTab = 'local'; gameState = STATE.LEADERBOARD; }
+                else if (id === 'tab_global') { window.leaderboardTab = 'global'; gameState = STATE.LEADERBOARD; }
+                else if (id === 'buy_slot' && abilitySlots < 3) { const cost = 50 + abilitySlots * 30; if (playerCoins >= cost) { playerCoins -= cost; abilitySlots++; saveData(); } }
+                else if (id.startsWith('buy_')) { const k = id.substring(4); if (!abilitiesData[k]?.level && playerCoins >= ABILITY_DEFS[k].baseCost) { playerCoins -= ABILITY_DEFS[k].baseCost; abilitiesData[k] = { level: 1 }; saveData(); } }
+                else if (id.startsWith('upgrade_')) { const k = id.substring(8); if (getAbilityLevel(k) < ABILITY_DEFS[k].maxLevel && playerCoins >= getAbilityUpgradeCost(k)) { playerCoins -= getAbilityUpgradeCost(k); abilitiesData[k].level++; saveData(); } }
+                else if (id.startsWith('equip_')) { const k = id.substring(6); if (!equippedAbilities.includes(k) && equippedAbilities.length < abilitySlots) { equippedAbilities.push(k); saveData(); } }
+                else if (id.startsWith('unequip_')) { const k = id.substring(8); equippedAbilities = equippedAbilities.filter(a => a !== k); saveData(); }
+                else if (id === 'prev_char') { const unlocked = unlockedCharacters.filter(id => AVATARS.find(a => a.id === id)); const idx = unlocked.indexOf(activeCharacter); if (idx > 0) { activeCharacter = unlocked[idx - 1]; saveData(); } }
+                else if (id === 'next_char') { const unlocked = unlockedCharacters.filter(id => AVATARS.find(a => a.id === id)); const idx = unlocked.indexOf(activeCharacter); if (idx < unlocked.length - 1) { activeCharacter = unlocked[idx + 1]; saveData(); } }
+                else if (id === 'toggle_mute') { muted = !muted; saveData(); if (muted) stopMusic(); }
+                else if (id === 'reset_data') { window._resetConfirm = true; }
+                else if (id === 'confirm_reset') { resetAll(); loadData(); window._resetConfirm = false; gameState = STATE.MENU; clearScrollableScreen(); showMessage('All data reset!', 2); }
+                else if (id === 'cancel_reset') { window._resetConfirm = false; }
             }
 
             // ==================== INIT ====================
             loadData();
-            // FIX: clear boss retry on reload to prevent broken state
-            if (bossAttemptRemaining) { bossAttemptRemaining = false;
-                saveData(); }
+            if (bossAttemptRemaining) { bossAttemptRemaining = false; saveData(); } // FIX boss reload
             loadLeaderboard();
             loadSharedScores();
             checkURLForScore();
-            stars = Array.from({ length: STAR_COUNT }, () => ({ x: Math.random() * W, y: Math.random() * H, speed: 0.5 + Math
-                    .random() * 2, radius: 0.5 + Math.random() * 1.8 }));
+            stars = Array.from({ length: STAR_COUNT }, () => ({ x: Math.random() * W, y: Math.random() * H, speed: 0.5 + Math.random() * 2, radius: 0.5 + Math.random() * 1.8 }));
             document.addEventListener('touchstart', resumeAudio, { once: true });
             document.addEventListener('mousedown', resumeAudio, { once: true });
             clearScrollableScreen();
@@ -1956,8 +1924,7 @@
                 let dt = (time - lastTime) / 1000;
                 if (dt > 0.1) dt = 0.1;
                 accumulator += dt;
-                while (accumulator >= FIXED_DT) { update();
-                    accumulator -= FIXED_DT; }
+                while (accumulator >= FIXED_DT) { update(); accumulator -= FIXED_DT; }
                 draw();
                 lastTime = time;
                 requestAnimationFrame(loop);
