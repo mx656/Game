@@ -5,7 +5,11 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
     <title>Neon Gauntlet – Big Screen</title>
     <style>
-        * { margin:0; padding:0; box-sizing:border-box; }
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
         body {
             background: #050510;
             display: flex;
@@ -15,12 +19,13 @@
             overflow: hidden;
             font-family: 'Courier New', monospace;
             touch-action: manipulation;
+            -webkit-tap-highlight-color: transparent;
+            user-select: none;
         }
         #gameContainer {
             position: relative;
-            /* Large but not full screen – 85% of viewport */
-            width:  min(85vw, 85vh * 1.5);
-            height: min(56.6667vw, 85vh); /* 3:2 aspect ratio */
+            width: min(85vw, 85vh * 1.5);
+            height: min(56.6667vw, 85vh);
             aspect-ratio: 3 / 2;
             display: flex;
             align-items: center;
@@ -31,14 +36,14 @@
             width: 100%;
             height: 100%;
             border: 1px solid #333;
-            box-shadow: 0 0 40px rgba(0,255,255,0.3);
+            box-shadow: 0 0 40px rgba(0, 255, 255, 0.3);
             border-radius: 6px;
             cursor: pointer;
             image-rendering: crisp-edges;
         }
         .game-btn {
             position: absolute;
-            background: rgba(0,0,0,0.6);
+            background: rgba(0, 0, 0, 0.6);
             border: 2px solid #fff;
             color: #fff;
             font-family: 'Courier New', monospace;
@@ -51,42 +56,66 @@
             justify-content: center;
             touch-action: manipulation;
             user-select: none;
+            -webkit-tap-highlight-color: transparent;
+            transition: background 0.15s, transform 0.1s;
+        }
+        .game-btn:active {
+            transform: scale(0.92);
+            background: rgba(255, 255, 255, 0.15);
         }
         #jumpBtn {
-            bottom: 10%; left: 5%;
-            width: 15%; height: 15%;
-            min-width: 50px; min-height: 50px;
+            bottom: 10%;
+            left: 5%;
+            width: 15%;
+            height: 15%;
+            min-width: 50px;
+            min-height: 50px;
             font-size: 2.5vmin;
-            border-color: #0ff; color: #0ff;
-            background: rgba(0,255,255,0.15);
+            border-color: #0ff;
+            color: #0ff;
+            background: rgba(0, 255, 255, 0.15);
         }
         #abilityBtn {
-            bottom: 10%; right: 5%;
-            width: 15%; height: 15%;
-            min-width: 50px; min-height: 50px;
+            bottom: 10%;
+            right: 5%;
+            width: 15%;
+            height: 15%;
+            min-width: 50px;
+            min-height: 50px;
             font-size: 2.5vmin;
-            border-color: #ffcc00; color: #ffcc00;
-            background: rgba(255,200,0,0.15);
+            border-color: #ffcc00;
+            color: #ffcc00;
+            background: rgba(255, 200, 0, 0.15);
         }
         #muteBtn {
-            top: 5%; left: 5%;
-            width: 10%; height: 10%;
-            min-width: 36px; min-height: 36px;
+            top: 5%;
+            left: 5%;
+            width: 10%;
+            height: 10%;
+            min-width: 36px;
+            min-height: 36px;
             font-size: 2vmin;
-            border-color: #888; color: #888;
-            background: rgba(0,0,0,0.6);
+            border-color: #888;
+            color: #888;
+            background: rgba(0, 0, 0, 0.6);
         }
         #shareBtn {
             position: absolute;
-            top: 5%; right: 5%;
+            top: 5%;
+            right: 5%;
             padding: 1.5% 3%;
             border-radius: 6px;
-            background: #00cc44; color: #fff;
+            background: #00cc44;
+            color: #fff;
             border: none;
             font-size: 2vmin;
             cursor: pointer;
             font-family: 'Courier New', monospace;
-            display: none; /* shown by JS */
+            display: none;
+            transition: background 0.2s;
+        }
+        #shareBtn:hover {
+            background: #00ee55;
         }
         .info {
             position: absolute;
@@ -100,869 +129,1523 @@
     </style>
 </head>
 <body>
-<div id="gameContainer">
-    <canvas id="gameCanvas" width="480" height="320"></canvas>
-    <div id="jumpBtn" class="game-btn">▲</div>
-    <div id="abilityBtn" class="game-btn">⚡</div>
-    <div id="muteBtn" class="game-btn">🔊</div>
-    <button id="shareBtn" style="display:none;">📤 Share</button>
-</div>
-<div class="info">TAP / SPACE = JUMP (DOUBLE TAP FOR AIR JUMP) | ⚡ = USE ABILITY | P / ESC = PAUSE</div>
+    <div id="gameContainer">
+        <canvas id="gameCanvas" width="480" height="320"></canvas>
+        <div id="jumpBtn" class="game-btn">▲</div>
+        <div id="abilityBtn" class="game-btn">⚡</div>
+        <div id="muteBtn" class="game-btn">🔊</div>
+        <button id="shareBtn">📤 Share</button>
+    </div>
+    <div class="info">TAP / SPACE = JUMP (DOUBLE TAP FOR AIR JUMP) | ⚡ = USE ABILITY | P / ESC = PAUSE</div>
 
-<script>
-    (function() {
-        // ---------- CONSTANTS ----------
-        const canvas = document.getElementById('gameCanvas');
-        const ctx = canvas.getContext('2d');
-        const jumpBtn = document.getElementById('jumpBtn');
-        const abilityBtn = document.getElementById('abilityBtn');
-        const muteBtn = document.getElementById('muteBtn');
-        const shareBtn = document.getElementById('shareBtn');
-        const W = 480, H = 320;
-        const GROUND_Y = H - 40;
-        const PLAYER_W = 22, PLAYER_H = 22;
-        const PLAYER_X = 70;
-        const FIXED_DT = 1/60;
+    <script>
+        (function() {
+            // ---------- CONSTANTS ----------
+            const canvas = document.getElementById('gameCanvas');
+            const ctx = canvas.getContext('2d');
+            const jumpBtn = document.getElementById('jumpBtn');
+            const abilityBtn = document.getElementById('abilityBtn');
+            const muteBtn = document.getElementById('muteBtn');
+            const shareBtn = document.getElementById('shareBtn');
+            const W = 480,
+                H = 320;
+            const GROUND_Y = H - 40;
+            const PLAYER_W = 22,
+                PLAYER_H = 22;
+            const PLAYER_X = 70;
+            const FIXED_DT = 1 / 60;
 
-        const STATE = { MENU:'menu', PLAYING:'playing', SHOP:'shop', BOSS:'boss', GAMEOVER:'gameover', LEADERBOARD:'leaderboard' };
-        let gameState = STATE.MENU;
-
-        let playerCoins = 0;
-        let abilitiesData = {};
-        let equippedAbilities = [];
-        let abilitySlots = 1;
-        let bossDefeated = false;
-        let bossAttemptRemaining = false;
-        let highScore = 0;
-        let leaderboard = [];
-        let sharedScores = [];
-        let muted = false;
-
-        const SAVE_KEY = 'neonGauntletBigScreen';
-        const LEADERBOARD_KEY = 'neonGauntletLeaderboard';
-        const SHARED_KEY = 'neonGauntletSharedScores';
-        const MUTE_KEY = 'neonGauntletMuted';
-
-        const ABILITY_DEFS = {
-            shield:    { name:'Shield',       desc:'Temporary invincibility', baseCost:30, color:'#00ccff', baseCooldown:25, baseDuration:3,   cooldownPerLevel:-2, durationPerLevel:0.5, maxLevel:4 },
-            slowTime:  { name:'Slow Time',    desc:'Slow all obstacles',       baseCost:50, color:'#ffaa00', baseCooldown:30, baseDuration:5,   cooldownPerLevel:-3, durationPerLevel:1,   maxLevel:3 },
-            coinMagnet:{ name:'Coin Magnet',  desc:'Attract coins from afar',  baseCost:20, color:'#ffdd44', baseCooldown:15, baseDuration:8,   cooldownPerLevel:-1, durationPerLevel:1.5, maxLevel:4 },
-            doubleScore:{ name:'Double Score',desc:'Earn 2x points',           baseCost:40, color:'#ff44ff', baseCooldown:35, baseDuration:6,   cooldownPerLevel:-3, durationPerLevel:1,   maxLevel:3 },
-            tripleJump:{ name:'Triple Jump',  desc:'Extra mid‑air jumps',      baseCost:60, color:'#ff2222', baseCooldown:20, baseDuration:4,   cooldownPerLevel:-2, durationPerLevel:0.8, maxLevel:3 }
-        };
-
-        const AVATARS = [
-            { min:0,   shape:'square',    color:'#00ffff', glow:'#00ffff', name:'Rookie' },
-            { min:10,  shape:'diamond',   color:'#ff44ff', glow:'#ff44ff', name:'Dasher' },
-            { min:25,  shape:'circle',    color:'#ffaa00', glow:'#ffaa00', name:'Runner' },
-            { min:50,  shape:'star5',     color:'#00ff44', glow:'#00ff44', name:'Elite' },
-            { min:100, shape:'hexagon',   color:'#ffd700', glow:'#ffd700', name:'Legend' },
-            { min:200, shape:'star8',     color:'#ff8800', glow:'#ff8800', name:'Master' },
-            { min:500, shape:'decagon',   color:'#ff00ff', glow:'#ff00ff', name:'GOD' }
-        ];
-
-        let score = 0, runCoins = 0;
-        let speed = 5, baseSpeed = 5;
-        let level = 1;
-        const SCORE_PER_LEVEL = 15;
-        let scoreThisLevel = 0;
-        const SPEED_INC_PER_SCORE = 0.01;
-        const LEVEL_SPEED_BOOST = 1.1;
-
-        let player = { x: PLAYER_X, y: GROUND_Y - PLAYER_H, width: PLAYER_W, height: PLAYER_H, vy:0, grounded:true, doubleJumpAvailable:true };
-        const GRAVITY = 0.55, JUMP_VEL = -9.2, DOUBLE_JUMP_VEL = -6.5;
-        let extraJumpsActive = false;
-
-        let abilityCooldowns = {};
-        let activeEffects = {};
-
-        const CHECKPOINT_INTERVAL = 250;
-        let checkpointActive = false;
-        let checkpointTimer = 0;
-        let checkpointData = null;
-
-        let paused = false;
-
-        let obstacles = [], coins = [];
-        const OBS_W = 20, OBS_MIN_H = 24, OBS_MAX_H = 44;
-        const COIN_SIZE = 12;
-        let spawnTimer = 0, coinSpawnTimer = 0;
-        const BASE_SPAWN_DELAY_SEC = 1.166;
-        const COIN_SPAWN_DELAY_SEC = 1.5;
-
-        let bossLives = 0, bossDodged = 0;
-        const BOSS_REQUIRED_DODGES = 60;
-        const BOSS_ENTRY_FEE = 30, MAX_BOSS_LIVES = 10;
-        let bossEntity = { x: W-80, y: 60, width:60, height:100, vibrate:0 };
-        let bossObstacles = [], bossSpawnTimer = 0, bossSpawnCooldown = 30/60, bossActiveObstaclesSpawned = 0;
-
-        let particles = [], speedLines = [];
-        let flashAlpha = 0, shakeAmount = 0;
-        let stars = [];
-        const STAR_COUNT = 50;
-
-        let levelUpText = '';
-        let levelUpTimer = 0;
-
-        const themes = [
-            { bg:['#0a0a14','#111122'], ground:'#00ffff', obs:'#ff00ff', stars:'#ffffff' },
-            { bg:['#140a0a','#221111'], ground:'#ffaa00', obs:'#ff4400', stars:'#ff8844' },
-            { bg:['#0a141a','#0a1f2b'], ground:'#00ccff', obs:'#0088ff', stars:'#88ddff' },
-            { bg:['#0a140a','#112211'], ground:'#00ff44', obs:'#44ff00', stars:'#88ff44' },
-            { bg:['#140a14','#221122'], ground:'#ff44ff', obs:'#ff00aa', stars:'#ffaaff' },
-            { bg:['#0a0a14','#1a1a2e'], ground:'#ffd700', obs:'#ffaa00', stars:'#ffe066' },
-            { bg:['#140a0a','#0a1414'], ground:'#ff3333', obs:'#33ccff', stars:'#ff9966' },
-            { bg:['#1a0a1a','#2a0a2a'], ground:'#ffcc00', obs:'#ff0066', stars:'#ff6699' }
-        ];
-        let currentTheme = themes[0];
-
-        // ... (rest of the game code – I'm including the complete logic below for completeness, but the only change is the CSS above)
-
-        // ---------- AUDIO ----------
-        let audioCtx = null;
-        function initAudio() { if (!audioCtx) try { audioCtx = new (window.AudioContext || window.webkitAudioContext()); } catch(e) {} }
-        function resumeAudio() { if (audioCtx && audioCtx.state === 'suspended') audioCtx.resume(); }
-        function playTone(freq, dur, type='square', vol=0.08) {
-            if (!audioCtx || muted) return;
-            const o = audioCtx.createOscillator();
-            const g = audioCtx.createGain();
-            o.type = type; o.frequency.setValueAtTime(freq, audioCtx.currentTime);
-            g.gain.setValueAtTime(vol, audioCtx.currentTime);
-            g.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + dur);
-            o.connect(g); g.connect(audioCtx.destination);
-            o.start(); o.stop(audioCtx.currentTime + dur);
-        }
-        function sfxJump() { playTone(200, 0.1, 'square', 0.1); setTimeout(() => playTone(300, 0.1, 'square', 0.1), 50); }
-        function sfxCoin() { playTone(800, 0.08, 'sine', 0.12); setTimeout(() => playTone(1000, 0.08, 'sine', 0.12), 60); }
-        function sfxCheckpoint() { playTone(400, 0.15, 'triangle', 0.2); }
-        function sfxDeath() { playTone(150, 0.3, 'sawtooth', 0.15); }
-        function sfxLevelUp() { playTone(523, 0.1, 'square', 0.15); setTimeout(()=>playTone(659,0.1),80); setTimeout(()=>playTone(784,0.15),160); }
-        function sfxAbility() { playTone(600, 0.12, 'sine', 0.2); }
-        function sfxBossDodge() { playTone(440, 0.05, 'square', 0.1); }
-        function sfxBossWin() { for(let i=0;i<5;i++) setTimeout(()=>playTone(500+i*100,0.1,'triangle',0.15), i*100); }
-
-        // ---------- MUSIC ----------
-        let musicInterval = null, musicActive = false;
-        function startMusic() { if (musicActive) return; initAudio(); resumeAudio(); musicActive = true; scheduleNextBeat(); }
-        function stopMusic() { musicActive = false; if (musicInterval) { clearTimeout(musicInterval); musicInterval = null; } }
-        function scheduleNextBeat() {
-            if (!musicActive || !audioCtx || muted) return;
-            let bpm = 120;
-            if (gameState === STATE.PLAYING) bpm = 120 + speed * 8;
-            else if (gameState === STATE.BOSS) bpm = 140 + bossDodged * 2;
-            const interval = 60000 / bpm;
-            playTone(60, 0.1, 'sine', 0.12);
-            if (Math.random() < 0.5) playTone(800, 0.05, 'square', 0.03);
-            const notes = [262,294,330,349,392,440,494,523];
-            const note = notes[(level-1) % notes.length];
-            playTone(note, 0.12, 'triangle', 0.06);
-            musicInterval = setTimeout(scheduleNextBeat, interval);
-        }
-
-        // ---------- DATA PERSISTENCE ----------
-        function loadData() {
-            try {
-                const d = JSON.parse(localStorage.getItem(SAVE_KEY));
-                if (d) {
-                    playerCoins = d.coins || 0;
-                    abilitiesData = d.abilities || {};
-                    equippedAbilities = d.equipped || [];
-                    abilitySlots = d.slots || 1;
-                    bossDefeated = d.boss || false;
-                    highScore = d.highScore || 0;
-                    bossAttemptRemaining = d.bossAttempt || false;
-                    muted = localStorage.getItem(MUTE_KEY) === 'true';
-                }
-            } catch(e) { resetAll(); }
-            if (abilitySlots < 1) abilitySlots = 1;
-            if (equippedAbilities.length > abilitySlots) equippedAbilities = equippedAbilities.slice(0, abilitySlots);
-        }
-        function saveData() {
-            try {
-                localStorage.setItem(SAVE_KEY, JSON.stringify({
-                    coins: playerCoins, abilities: abilitiesData, equipped: equippedAbilities,
-                    slots: abilitySlots, boss: bossDefeated, highScore: highScore, bossAttempt: bossAttemptRemaining
-                }));
-                localStorage.setItem(MUTE_KEY, muted);
-            } catch(e) {}
-        }
-        function resetAll() {
-            playerCoins = 0; abilitiesData = {}; equippedAbilities = []; abilitySlots = 1;
-            bossDefeated = false; bossAttemptRemaining = false; highScore = 0; saveData();
-        }
-
-        function loadLeaderboard() {
-            try { const d = JSON.parse(localStorage.getItem(LEADERBOARD_KEY)); if(d) leaderboard = d; } catch(e) { leaderboard = []; }
-        }
-        function saveLeaderboard(sc) {
-            leaderboard.push(sc); leaderboard.sort((a,b) => b-a);
-            if (leaderboard.length > 10) leaderboard.pop();
-            localStorage.setItem(LEADERBOARD_KEY, JSON.stringify(leaderboard));
-            highScore = Math.max(...leaderboard);
-        }
-        function loadSharedScores() {
-            try { const d = JSON.parse(localStorage.getItem(SHARED_KEY)); if(d) sharedScores = d; } catch(e) { sharedScores = []; }
-        }
-        function saveSharedScore(sc) {
-            sharedScores.push(sc); sharedScores.sort((a,b) => b-a);
-            if (sharedScores.length > 20) sharedScores.pop();
-            localStorage.setItem(SHARED_KEY, JSON.stringify(sharedScores));
-        }
-        function checkURLForScore() {
-            const params = new URLSearchParams(window.location.search);
-            const scoreStr = params.get('score');
-            if (scoreStr) {
-                const sc = parseInt(scoreStr, 10);
-                if (!isNaN(sc) && sc > 0) {
-                    saveSharedScore(sc);
-                    history.replaceState(null, '', window.location.pathname);
-                }
-            }
-        }
-
-        function getAvatar() {
-            for (let i = AVATARS.length-1; i >= 0; i--) if (highScore >= AVATARS[i].min) return AVATARS[i];
-            return AVATARS[0];
-        }
-
-        function getAbilityLevel(key) { return abilitiesData[key]?.level || 0; }
-        function getAbilityCooldown(key) {
-            const d = ABILITY_DEFS[key]; const lvl = getAbilityLevel(key);
-            return d.baseCooldown + (d.cooldownPerLevel * (lvl - 1));
-        }
-        function getAbilityDuration(key) {
-            const d = ABILITY_DEFS[key]; const lvl = getAbilityLevel(key);
-            return d.baseDuration + (d.durationPerLevel * (lvl - 1));
-        }
-        function getAbilityUpgradeCost(key) {
-            const d = ABILITY_DEFS[key]; const lvl = getAbilityLevel(key);
-            return d.baseCost + lvl * 10;
-        }
-
-        // ---------- CHECKPOINT ----------
-        function setCheckpoint() {
-            checkpointData = {
-                score, speed, baseSpeed, level, scoreThisLevel,
-                themeIndex: themes.indexOf(currentTheme),
-                extraJumpsActive,
-                abilityCooldowns: { ...abilityCooldowns },
-                activeEffects: { ...activeEffects }
+            const STATE = {
+                MENU: 'menu',
+                PLAYING: 'playing',
+                SHOP: 'shop',
+                BOSS: 'boss',
+                GAMEOVER: 'gameover',
+                LEADERBOARD: 'leaderboard'
             };
-            checkpointActive = true;
-            checkpointTimer = 60; // 1 minute
-            flashAlpha = 0.7;
-            sfxCheckpoint();
-            for (let i = 0; i < 20; i++) particles.push({
-                x: W/2, y: GROUND_Y-30, vx: (Math.random()-0.5)*6, vy: -Math.random()*5,
-                life: 1, decay: 0.025, size: 4+Math.random()*4, color: '#ffffff'
-            });
-        }
+            let gameState = STATE.MENU;
 
-        function respawnFromCheckpoint() {
-            if (!checkpointData) return false;
-            score = checkpointData.score;
-            speed = checkpointData.speed;
-            baseSpeed = checkpointData.baseSpeed;
-            level = checkpointData.level;
-            scoreThisLevel = checkpointData.scoreThisLevel;
-            currentTheme = themes[checkpointData.themeIndex];
-            extraJumpsActive = checkpointData.extraJumpsActive;
-            abilityCooldowns = { ...checkpointData.abilityCooldowns };
-            activeEffects = { ...checkpointData.activeEffects };
-            player.y = GROUND_Y - PLAYER_H; player.vy = 0;
-            player.grounded = true; player.doubleJumpAvailable = true;
-            obstacles = []; coins = [];
-            spawnTimer = 0; coinSpawnTimer = 0;
-            particles = []; speedLines = [];
-            flashAlpha = 0.5; shakeAmount = 3;
-            return true;
-        }
+            let playerCoins = 0;
+            let abilitiesData = {};
+            let equippedAbilities = [];
+            let abilitySlots = 1;
+            let bossDefeated = false;
+            let bossAttemptRemaining = false;
+            let highScore = 0;
+            let leaderboard = [];
+            let sharedScores = [];
+            let muted = false;
 
-        function resetRun() {
-            player.y = GROUND_Y - PLAYER_H; player.vy = 0; player.grounded = true; player.doubleJumpAvailable = true;
-            extraJumpsActive = false;
-            obstacles = []; coins = []; particles = []; speedLines = [];
-            flashAlpha = 0; shakeAmount = 0; spawnTimer = 0; coinSpawnTimer = 0;
-            score = 0; runCoins = 0; scoreThisLevel = 0; level = 1;
-            baseSpeed = 5; speed = 5; currentTheme = themes[0];
-            checkpointActive = false; checkpointTimer = 0; checkpointData = null;
-            abilityCooldowns = {}; activeEffects = {};
-            paused = false;
-            levelUpText = ''; levelUpTimer = 0;
-        }
+            const SAVE_KEY = 'neonGauntletBigScreen';
+            const LEADERBOARD_KEY = 'neonGauntletLeaderboard';
+            const SHARED_KEY = 'neonGauntletSharedScores';
+            const MUTE_KEY = 'neonGauntletMuted';
 
-        function getMaxClearableHeight(spd) {
-            const peak = (JUMP_VEL * JUMP_VEL) / (2 * GRAVITY);
-            return Math.floor(peak * Math.max(0.4, 1.0 - spd * 0.035) - 4);
-        }
-
-        function spawnObstacle() {
-            const maxH = getMaxClearableHeight(speed);
-            const h = 24 + Math.random() * (maxH - 24);
-            if (level >= 6 && Math.random() < 0.35) {
-                obstacles.push({ x:W, y:GROUND_Y-h, width:OBS_W, height:h, type:'wave', baseY:GROUND_Y-h, amplitude:20+Math.random()*20, freq:2+Math.random()*3, phase:Math.random()*Math.PI*2, counted:false });
-            } else {
-                obstacles.push({ x:W, y:GROUND_Y-h, width:OBS_W, height:h, type:'normal', counted:false });
-            }
-        }
-        function spawnCoin() { coins.push({ x:W, y:GROUND_Y-50-Math.random()*30, width:COIN_SIZE, height:COIN_SIZE, collected:false, bobPhase: Math.random()*Math.PI*2 }); }
-
-        function advanceLevel() {
-            level++; baseSpeed = Math.min(level*1.2+3.8, 25); speed = baseSpeed;
-            scoreThisLevel = 0; currentTheme = themes[(level-1)%themes.length]; shakeAmount = 6;
-            levelUpText = 'LEVEL UP!'; levelUpTimer = 1.5;
-            if (level === 6) flashAlpha = 0.7;
-            sfxLevelUp();
-            for (let i=0; i<15; i++) particles.push({ x:W/2+(Math.random()-0.5)*100, y:H/2-30, vx:(Math.random()-0.5)*5, vy:-Math.random()*4, life:1, decay:0.03, size:4+Math.random()*4, color:currentTheme.ground });
-        }
-
-        function die() {
-            if (gameState === STATE.BOSS) {
-                bossLives--;
-                if (bossLives <= 0) {
-                    gameState = STATE.MENU; stopMusic(); saveData();
-                    bossAttemptRemaining = false;
-                } else {
-                    restartBossWave();
+            const ABILITY_DEFS = {
+                shield: {
+                    name: 'Shield',
+                    desc: 'Temporary invincibility',
+                    baseCost: 30,
+                    color: '#00ccff',
+                    baseCooldown: 25,
+                    baseDuration: 3,
+                    cooldownPerLevel: -2,
+                    durationPerLevel: 0.5,
+                    maxLevel: 4
+                },
+                slowTime: {
+                    name: 'Slow Time',
+                    desc: 'Slow all obstacles',
+                    baseCost: 50,
+                    color: '#ffaa00',
+                    baseCooldown: 30,
+                    baseDuration: 5,
+                    cooldownPerLevel: -3,
+                    durationPerLevel: 1,
+                    maxLevel: 3
+                },
+                coinMagnet: {
+                    name: 'Coin Magnet',
+                    desc: 'Attract coins from afar',
+                    baseCost: 20,
+                    color: '#ffdd44',
+                    baseCooldown: 15,
+                    baseDuration: 8,
+                    cooldownPerLevel: -1,
+                    durationPerLevel: 1.5,
+                    maxLevel: 4
+                },
+                doubleScore: {
+                    name: 'Double Score',
+                    desc: 'Earn 2x points',
+                    baseCost: 40,
+                    color: '#ff44ff',
+                    baseCooldown: 35,
+                    baseDuration: 6,
+                    cooldownPerLevel: -3,
+                    durationPerLevel: 1,
+                    maxLevel: 3
+                },
+                tripleJump: {
+                    name: 'Triple Jump',
+                    desc: 'Extra mid‑air jumps',
+                    baseCost: 60,
+                    color: '#ff2222',
+                    baseCooldown: 20,
+                    baseDuration: 4,
+                    cooldownPerLevel: -2,
+                    durationPerLevel: 0.8,
+                    maxLevel: 3
                 }
-                return;
+            };
+
+            const AVATARS = [
+                { min: 0, shape: 'square', color: '#00ffff', glow: '#00ffff', name: 'Rookie' },
+                { min: 10, shape: 'diamond', color: '#ff44ff', glow: '#ff44ff', name: 'Dasher' },
+                { min: 25, shape: 'circle', color: '#ffaa00', glow: '#ffaa00', name: 'Runner' },
+                { min: 50, shape: 'star5', color: '#00ff44', glow: '#00ff44', name: 'Elite' },
+                { min: 100, shape: 'hexagon', color: '#ffd700', glow: '#ffd700', name: 'Legend' },
+                { min: 200, shape: 'star8', color: '#ff8800', glow: '#ff8800', name: 'Master' },
+                { min: 500, shape: 'decagon', color: '#ff00ff', glow: '#ff00ff', name: 'GOD' }
+            ];
+
+            let score = 0,
+                runCoins = 0;
+            let speed = 5,
+                baseSpeed = 5;
+            let level = 1;
+            const SCORE_PER_LEVEL = 15;
+            let scoreThisLevel = 0;
+            const SPEED_INC_PER_SCORE = 0.01;
+            const LEVEL_SPEED_BOOST = 1.1;
+
+            let player = {
+                x: PLAYER_X,
+                y: GROUND_Y - PLAYER_H,
+                width: PLAYER_W,
+                height: PLAYER_H,
+                vy: 0,
+                grounded: true,
+                doubleJumpAvailable: true
+            };
+            const GRAVITY = 0.55,
+                JUMP_VEL = -9.2,
+                DOUBLE_JUMP_VEL = -6.5;
+            let extraJumpsActive = false;
+
+            let abilityCooldowns = {};
+            let activeEffects = {};
+
+            const CHECKPOINT_INTERVAL = 250;
+            let checkpointActive = false;
+            let checkpointTimer = 0;
+            let checkpointData = null;
+
+            let paused = false;
+
+            let obstacles = [],
+                coins = [];
+            const OBS_W = 20,
+                OBS_MIN_H = 24,
+                OBS_MAX_H = 44;
+            const COIN_SIZE = 12;
+            let spawnTimer = 0,
+                coinSpawnTimer = 0;
+            const BASE_SPAWN_DELAY_SEC = 1.166;
+            const COIN_SPAWN_DELAY_SEC = 1.5;
+
+            let bossLives = 0,
+                bossDodged = 0;
+            const BOSS_REQUIRED_DODGES = 60;
+            const BOSS_ENTRY_FEE = 30,
+                MAX_BOSS_LIVES = 10;
+            let bossEntity = { x: W - 80, y: 60, width: 60, height: 100, vibrate: 0 };
+            let bossObstacles = [],
+                bossSpawnTimer = 0,
+                bossSpawnCooldown = 30 / 60,
+                bossActiveObstaclesSpawned = 0;
+
+            let particles = [],
+                speedLines = [];
+            let flashAlpha = 0,
+                shakeAmount = 0;
+            let stars = [];
+            const STAR_COUNT = 50;
+
+            let levelUpText = '';
+            let levelUpTimer = 0;
+
+            const themes = [
+                { bg: ['#0a0a14', '#111122'], ground: '#00ffff', obs: '#ff00ff', stars: '#ffffff' },
+                { bg: ['#140a0a', '#221111'], ground: '#ffaa00', obs: '#ff4400', stars: '#ff8844' },
+                { bg: ['#0a141a', '#0a1f2b'], ground: '#00ccff', obs: '#0088ff', stars: '#88ddff' },
+                { bg: ['#0a140a', '#112211'], ground: '#00ff44', obs: '#44ff00', stars: '#88ff44' },
+                { bg: ['#140a14', '#221122'], ground: '#ff44ff', obs: '#ff00aa', stars: '#ffaaff' },
+                { bg: ['#0a0a14', '#1a1a2e'], ground: '#ffd700', obs: '#ffaa00', stars: '#ffe066' },
+                { bg: ['#140a0a', '#0a1414'], ground: '#ff3333', obs: '#33ccff', stars: '#ff9966' },
+                { bg: ['#1a0a1a', '#2a0a2a'], ground: '#ffcc00', obs: '#ff0066', stars: '#ff6699' }
+            ];
+            let currentTheme = themes[0];
+
+            // ---------- AUDIO ----------
+            let audioCtx = null;
+
+            function initAudio() {
+                if (!audioCtx) try { audioCtx = new(window.AudioContext || window.webkitAudioContext)(); } catch (e) {}
             }
-            sfxDeath();
-            if (checkpointActive && checkpointData) {
-                if (respawnFromCheckpoint()) {
-                    gameState = STATE.PLAYING; startMusic();
+
+            function resumeAudio() {
+                if (audioCtx && audioCtx.state === 'suspended') audioCtx.resume();
+            }
+
+            function playTone(freq, dur, type = 'square', vol = 0.08) {
+                if (!audioCtx || muted) return;
+                const o = audioCtx.createOscillator();
+                const g = audioCtx.createGain();
+                o.type = type;
+                o.frequency.setValueAtTime(freq, audioCtx.currentTime);
+                g.gain.setValueAtTime(vol, audioCtx.currentTime);
+                g.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + dur);
+                o.connect(g);
+                g.connect(audioCtx.destination);
+                o.start();
+                o.stop(audioCtx.currentTime + dur);
+            }
+
+            function sfxJump() { playTone(200, 0.1, 'square', 0.1);
+                setTimeout(() => playTone(300, 0.1, 'square', 0.1), 50); }
+
+            function sfxCoin() { playTone(800, 0.08, 'sine', 0.12);
+                setTimeout(() => playTone(1000, 0.08, 'sine', 0.12), 60); }
+
+            function sfxCheckpoint() { playTone(400, 0.15, 'triangle', 0.2); }
+
+            function sfxDeath() { playTone(150, 0.3, 'sawtooth', 0.15); }
+
+            function sfxLevelUp() { playTone(523, 0.1, 'square', 0.15);
+                setTimeout(() => playTone(659, 0.1), 80);
+                setTimeout(() => playTone(784, 0.15), 160); }
+
+            function sfxAbility() { playTone(600, 0.12, 'sine', 0.2); }
+
+            function sfxBossDodge() { playTone(440, 0.05, 'square', 0.1); }
+
+            function sfxBossWin() { for (let i = 0; i < 5; i++) setTimeout(() => playTone(500 + i * 100, 0.1, 'triangle',
+                    0.15), i * 100); }
+
+            // ---------- MUSIC ----------
+            let musicInterval = null,
+                musicActive = false;
+
+            function startMusic() {
+                if (musicActive) return;
+                initAudio();
+                resumeAudio();
+                musicActive = true;
+                scheduleNextBeat();
+            }
+
+            function stopMusic() {
+                musicActive = false;
+                if (musicInterval) { clearTimeout(musicInterval);
+                    musicInterval = null; }
+            }
+
+            function scheduleNextBeat() {
+                if (!musicActive || !audioCtx || muted) return;
+                let bpm = 120;
+                if (gameState === STATE.PLAYING) bpm = 120 + speed * 8;
+                else if (gameState === STATE.BOSS) bpm = 140 + bossDodged * 2;
+                const interval = 60000 / bpm;
+                playTone(60, 0.1, 'sine', 0.12);
+                if (Math.random() < 0.5) playTone(800, 0.05, 'square', 0.03);
+                const notes = [262, 294, 330, 349, 392, 440, 494, 523];
+                const note = notes[(level - 1) % notes.length];
+                playTone(note, 0.12, 'triangle', 0.06);
+                musicInterval = setTimeout(scheduleNextBeat, interval);
+            }
+
+            // ---------- DATA PERSISTENCE ----------
+            function loadData() {
+                try {
+                    const d = JSON.parse(localStorage.getItem(SAVE_KEY));
+                    if (d) {
+                        playerCoins = d.coins || 0;
+                        abilitiesData = d.abilities || {};
+                        equippedAbilities = d.equipped || [];
+                        abilitySlots = d.slots || 1;
+                        bossDefeated = d.boss || false;
+                        highScore = d.highScore || 0;
+                        bossAttemptRemaining = d.bossAttempt || false;
+                        muted = localStorage.getItem(MUTE_KEY) === 'true';
+                    }
+                } catch (e) { resetAll(); }
+                if (abilitySlots < 1) abilitySlots = 1;
+                if (equippedAbilities.length > abilitySlots) equippedAbilities = equippedAbilities.slice(0, abilitySlots);
+            }
+
+            function saveData() {
+                try {
+                    localStorage.setItem(SAVE_KEY, JSON.stringify({
+                        coins: playerCoins,
+                        abilities: abilitiesData,
+                        equipped: equippedAbilities,
+                        slots: abilitySlots,
+                        boss: bossDefeated,
+                        highScore: highScore,
+                        bossAttempt: bossAttemptRemaining
+                    }));
+                    localStorage.setItem(MUTE_KEY, muted);
+                } catch (e) {}
+            }
+
+            function resetAll() {
+                playerCoins = 0;
+                abilitiesData = {};
+                equippedAbilities = [];
+                abilitySlots = 1;
+                bossDefeated = false;
+                bossAttemptRemaining = false;
+                highScore = 0;
+                saveData();
+            }
+
+            function loadLeaderboard() {
+                try { const d = JSON.parse(localStorage.getItem(LEADERBOARD_KEY)); if (d) leaderboard = d; } catch (
+                    e) { leaderboard = []; }
+            }
+
+            function saveLeaderboard(sc) {
+                leaderboard.push(sc);
+                leaderboard.sort((a, b) => b - a);
+                if (leaderboard.length > 10) leaderboard.pop();
+                localStorage.setItem(LEADERBOARD_KEY, JSON.stringify(leaderboard));
+                highScore = Math.max(...leaderboard);
+            }
+
+            function loadSharedScores() {
+                try { const d = JSON.parse(localStorage.getItem(SHARED_KEY)); if (d) sharedScores = d; } catch (
+                e) { sharedScores = []; }
+            }
+
+            function saveSharedScore(sc) {
+                sharedScores.push(sc);
+                sharedScores.sort((a, b) => b - a);
+                if (sharedScores.length > 20) sharedScores.pop();
+                localStorage.setItem(SHARED_KEY, JSON.stringify(sharedScores));
+            }
+
+            function checkURLForScore() {
+                const params = new URLSearchParams(window.location.search);
+                const scoreStr = params.get('score');
+                if (scoreStr) {
+                    const sc = parseInt(scoreStr, 10);
+                    if (!isNaN(sc) && sc > 0) {
+                        saveSharedScore(sc);
+                        history.replaceState(null, '', window.location.pathname);
+                    }
+                }
+            }
+
+            function getAvatar() {
+                for (let i = AVATARS.length - 1; i >= 0; i--)
+                    if (highScore >= AVATARS[i].min) return AVATARS[i];
+                return AVATARS[0];
+            }
+
+            function getAbilityLevel(key) { return abilitiesData[key]?.level || 0; }
+
+            function getAbilityCooldown(key) {
+                const d = ABILITY_DEFS[key];
+                const lvl = getAbilityLevel(key);
+                return d.baseCooldown + (d.cooldownPerLevel * (lvl - 1));
+            }
+
+            function getAbilityDuration(key) {
+                const d = ABILITY_DEFS[key];
+                const lvl = getAbilityLevel(key);
+                return d.baseDuration + (d.durationPerLevel * (lvl - 1));
+            }
+
+            function getAbilityUpgradeCost(key) {
+                const d = ABILITY_DEFS[key];
+                const lvl = getAbilityLevel(key);
+                return d.baseCost + lvl * 10;
+            }
+
+            // ---------- CHECKPOINT ----------
+            function setCheckpoint() {
+                checkpointData = {
+                    score,
+                    speed,
+                    baseSpeed,
+                    level,
+                    scoreThisLevel,
+                    themeIndex: themes.indexOf(currentTheme),
+                    extraJumpsActive,
+                    abilityCooldowns: { ...abilityCooldowns },
+                    activeEffects: { ...activeEffects }
+                };
+                checkpointActive = true;
+                checkpointTimer = 60;
+                flashAlpha = 0.7;
+                sfxCheckpoint();
+                for (let i = 0; i < 20; i++) particles.push({
+                    x: W / 2,
+                    y: GROUND_Y - 30,
+                    vx: (Math.random() - 0.5) * 6,
+                    vy: -Math.random() * 5,
+                    life: 1,
+                    decay: 0.025,
+                    size: 4 + Math.random() * 4,
+                    color: '#ffffff'
+                });
+            }
+
+            function respawnFromCheckpoint() {
+                if (!checkpointData) return false;
+                score = checkpointData.score;
+                speed = checkpointData.speed;
+                baseSpeed = checkpointData.baseSpeed;
+                level = checkpointData.level;
+                scoreThisLevel = checkpointData.scoreThisLevel;
+                currentTheme = themes[checkpointData.themeIndex];
+                extraJumpsActive = checkpointData.extraJumpsActive;
+                abilityCooldowns = { ...checkpointData.abilityCooldowns };
+                activeEffects = { ...checkpointData.activeEffects };
+                player.y = GROUND_Y - PLAYER_H;
+                player.vy = 0;
+                player.grounded = true;
+                player.doubleJumpAvailable = true;
+                obstacles = [];
+                coins = [];
+                spawnTimer = 0;
+                coinSpawnTimer = 0;
+                particles = [];
+                speedLines = [];
+                flashAlpha = 0.5;
+                shakeAmount = 3;
+                return true;
+            }
+
+            function resetRun() {
+                player.y = GROUND_Y - PLAYER_H;
+                player.vy = 0;
+                player.grounded = true;
+                player.doubleJumpAvailable = true;
+                extraJumpsActive = false;
+                obstacles = [];
+                coins = [];
+                particles = [];
+                speedLines = [];
+                flashAlpha = 0;
+                shakeAmount = 0;
+                spawnTimer = 0;
+                coinSpawnTimer = 0;
+                score = 0;
+                runCoins = 0;
+                scoreThisLevel = 0;
+                level = 1;
+                baseSpeed = 5;
+                speed = 5;
+                currentTheme = themes[0];
+                checkpointActive = false;
+                checkpointTimer = 0;
+                checkpointData = null;
+                abilityCooldowns = {};
+                activeEffects = {};
+                paused = false;
+                levelUpText = '';
+                levelUpTimer = 0;
+            }
+
+            function getMaxClearableHeight(spd) {
+                const peak = (JUMP_VEL * JUMP_VEL) / (2 * GRAVITY);
+                return Math.floor(peak * Math.max(0.4, 1.0 - spd * 0.035) - 4);
+            }
+
+            function spawnObstacle() {
+                const maxH = getMaxClearableHeight(speed);
+                const h = 24 + Math.random() * (maxH - 24);
+                if (level >= 6 && Math.random() < 0.35) {
+                    obstacles.push({
+                        x: W,
+                        y: GROUND_Y - h,
+                        width: OBS_W,
+                        height: h,
+                        type: 'wave',
+                        baseY: GROUND_Y - h,
+                        amplitude: 20 + Math.random() * 20,
+                        freq: 2 + Math.random() * 3,
+                        phase: Math.random() * Math.PI * 2,
+                        counted: false
+                    });
+                } else {
+                    obstacles.push({
+                        x: W,
+                        y: GROUND_Y - h,
+                        width: OBS_W,
+                        height: h,
+                        type: 'normal',
+                        counted: false
+                    });
+                }
+            }
+
+            function spawnCoin() {
+                coins.push({
+                    x: W,
+                    y: GROUND_Y - 50 - Math.random() * 30,
+                    width: COIN_SIZE,
+                    height: COIN_SIZE,
+                    collected: false,
+                    bobPhase: Math.random() * Math.PI * 2
+                });
+            }
+
+            function advanceLevel() {
+                level++;
+                baseSpeed = Math.min(level * 1.2 + 3.8, 25);
+                speed = baseSpeed;
+                scoreThisLevel = 0;
+                currentTheme = themes[(level - 1) % themes.length];
+                shakeAmount = 6;
+                levelUpText = 'LEVEL UP!';
+                levelUpTimer = 1.5;
+                if (level === 6) flashAlpha = 0.7;
+                sfxLevelUp();
+                for (let i = 0; i < 15; i++) particles.push({
+                    x: W / 2 + (Math.random() - 0.5) * 100,
+                    y: H / 2 - 30,
+                    vx: (Math.random() - 0.5) * 5,
+                    vy: -Math.random() * 4,
+                    life: 1,
+                    decay: 0.03,
+                    size: 4 + Math.random() * 4,
+                    color: currentTheme.ground
+                });
+            }
+
+            function die() {
+                if (gameState === STATE.BOSS) {
+                    bossLives--;
+                    if (bossLives <= 0) {
+                        gameState = STATE.MENU;
+                        stopMusic();
+                        saveData();
+                        bossAttemptRemaining = false;
+                    } else {
+                        restartBossWave();
+                    }
                     return;
                 }
+                sfxDeath();
+                if (checkpointActive && checkpointData) {
+                    if (respawnFromCheckpoint()) {
+                        gameState = STATE.PLAYING;
+                        startMusic();
+                        return;
+                    }
+                }
+                gameState = STATE.GAMEOVER;
+                stopMusic();
+                playerCoins += runCoins;
+                if (score > highScore) { highScore = score;
+                    saveLeaderboard(score); }
+                saveData();
+                for (let i = 0; i < 20; i++) particles.push({
+                    x: player.x + player.width / 2,
+                    y: player.y + player.height / 2,
+                    vx: (Math.random() - 0.5) * 8,
+                    vy: -Math.random() * 6,
+                    life: 1,
+                    decay: 0.02,
+                    size: 3 + Math.random() * 5,
+                    color: currentTheme.obs
+                });
+                flashAlpha = 0.6;
+                shakeAmount = 8;
             }
-            gameState = STATE.GAMEOVER; stopMusic();
-            playerCoins += runCoins;
-            if (score > highScore) { highScore = score; saveLeaderboard(score); }
-            saveData();
-            for (let i=0; i<20; i++) particles.push({ x:player.x+player.width/2, y:player.y+player.height/2, vx:(Math.random()-0.5)*8, vy:-Math.random()*6, life:1, decay:0.02, size:3+Math.random()*5, color:currentTheme.obs });
-            flashAlpha = 0.6; shakeAmount = 8;
-        }
 
-        function winBoss() {
-            abilitySlots = 2; bossDefeated = true; playerCoins += 20; bossAttemptRemaining = false; saveData();
-            gameState = STATE.MENU; stopMusic(); sfxBossWin();
-            for (let i=0; i<30; i++) particles.push({ x:W/2, y:H/2, vx:(Math.random()-0.5)*10, vy:-Math.random()*8, life:1, decay:0.015, size:5+Math.random()*6, color:'#ffd700' });
-        }
+            function winBoss() {
+                abilitySlots = 2;
+                bossDefeated = true;
+                playerCoins += 20;
+                bossAttemptRemaining = false;
+                saveData();
+                gameState = STATE.MENU;
+                stopMusic();
+                sfxBossWin();
+                for (let i = 0; i < 30; i++) particles.push({
+                    x: W / 2,
+                    y: H / 2,
+                    vx: (Math.random() - 0.5) * 10,
+                    vy: -Math.random() * 8,
+                    life: 1,
+                    decay: 0.015,
+                    size: 5 + Math.random() * 6,
+                    color: '#ffd700'
+                });
+            }
 
-        function restartBossWave() {
-            bossObstacles = []; bossSpawnTimer = 0; bossActiveObstaclesSpawned = 0; bossEntity.vibrate = 0;
-            player.y = GROUND_Y - PLAYER_H; player.vy = 0; player.grounded = true; player.doubleJumpAvailable = true;
-            extraJumpsActive = false;
-            abilityCooldowns = {}; activeEffects = {};
-        }
+            function restartBossWave() {
+                bossObstacles = [];
+                bossSpawnTimer = 0;
+                bossActiveObstaclesSpawned = 0;
+                bossEntity.vibrate = 0;
+                player.y = GROUND_Y - PLAYER_H;
+                player.vy = 0;
+                player.grounded = true;
+                player.doubleJumpAvailable = true;
+                extraJumpsActive = false;
+                abilityCooldowns = {};
+                activeEffects = {};
+            }
 
-        function startBoss(keepLives = false) {
-            if (!keepLives) {
-                if (bossAttemptRemaining) {
-                    bossLives = MAX_BOSS_LIVES; bossDodged = 0;
+            function startBoss(keepLives = false) {
+                if (!keepLives) {
+                    if (bossAttemptRemaining) {
+                        bossLives = MAX_BOSS_LIVES;
+                        bossDodged = 0;
+                    } else {
+                        if (playerCoins < BOSS_ENTRY_FEE) return false;
+                        playerCoins -= BOSS_ENTRY_FEE;
+                        bossAttemptRemaining = true;
+                        bossLives = MAX_BOSS_LIVES;
+                        bossDodged = 0;
+                        saveData();
+                    }
+                }
+                bossObstacles = [];
+                bossSpawnTimer = 0;
+                bossSpawnCooldown = 30 / 60;
+                bossActiveObstaclesSpawned = 0;
+                bossEntity.x = W - 80;
+                bossEntity.y = 60;
+                bossEntity.vibrate = 0;
+                player.y = GROUND_Y - PLAYER_H;
+                player.vy = 0;
+                player.grounded = true;
+                player.doubleJumpAvailable = true;
+                extraJumpsActive = false;
+                abilityCooldowns = {};
+                activeEffects = {};
+                gameState = STATE.BOSS;
+                startMusic();
+                return true;
+            }
+
+            function spawnBossObstacle() {
+                const phase = Math.floor(Math.random() * 4);
+                switch (phase) {
+                    case 0:
+                        const spikeH = 25 + Math.random() * 20;
+                        bossObstacles.push({
+                            x: W,
+                            y: GROUND_Y - spikeH,
+                            width: 18,
+                            height: spikeH,
+                            type: 'spike',
+                            phase: Math.random() * Math.PI * 2
+                        });
+                        break;
+                    case 1:
+                        bossObstacles.push({
+                            x: W,
+                            y: 100 + Math.random() * 80,
+                            width: 20,
+                            height: 20,
+                            type: 'orb',
+                            baseY: 100 + Math.random() * 80,
+                            amplitude: 40 + Math.random() * 40,
+                            freq: 2 + Math.random() * 2,
+                            phase: Math.random() * Math.PI * 2
+                        });
+                        break;
+                    case 2:
+                        bossObstacles.push({
+                            x: 150 + Math.random() * 200,
+                            y: -30,
+                            width: 16,
+                            height: 16,
+                            type: 'falling',
+                            vy: 3 + Math.random() * 3
+                        });
+                        break;
+                    case 3:
+                        bossObstacles.push({
+                            x: W,
+                            y: player.y + (Math.random() - 0.5) * 60,
+                            width: 14,
+                            height: 14,
+                            type: 'homing',
+                            speed: 1.5 + Math.random() * 1.5
+                        });
+                        break;
+                }
+                bossActiveObstaclesSpawned++;
+                bossSpawnCooldown = Math.max(12 / 60, (30 - bossDodged * 0.3) / 60);
+            }
+
+            function activateAbility(key) {
+                if (gameState !== STATE.PLAYING && gameState !== STATE.BOSS) return;
+                if (abilityCooldowns[key] && abilityCooldowns[key] > 0) return;
+                if (!equippedAbilities.includes(key)) return;
+                const lvl = getAbilityLevel(key);
+                if (lvl <= 0) return;
+                const dur = getAbilityDuration(key);
+                const cd = getAbilityCooldown(key);
+                abilityCooldowns[key] = cd;
+                activeEffects[key] = dur;
+                flashAlpha = 0.3;
+                sfxAbility();
+                for (let i = 0; i < 8; i++) particles.push({
+                    x: player.x + player.width / 2,
+                    y: player.y + player.height / 2,
+                    vx: (Math.random() - 0.5) * 4,
+                    vy: -Math.random() * 3,
+                    life: 0.6,
+                    decay: 0.06,
+                    size: 3 + Math.random() * 3,
+                    color: ABILITY_DEFS[key].color
+                });
+            }
+
+            // ---------- UPDATE ----------
+            function update() {
+                if (gameState === STATE.PLAYING && paused) return;
+
+                for (let key in abilityCooldowns)
+                    if (abilityCooldowns[key] > 0) abilityCooldowns[key] -= FIXED_DT;
+                for (let key in activeEffects)
+                    if (activeEffects[key] > 0) activeEffects[key] -= FIXED_DT;
+                    else delete activeEffects[key];
+                if (checkpointActive) {
+                    checkpointTimer -= FIXED_DT;
+                    if (checkpointTimer <= 0) { checkpointActive = false;
+                        checkpointData = null; }
+                }
+                if (levelUpTimer > 0) { levelUpTimer -= FIXED_DT; if (levelUpTimer <= 0) levelUpText = ''; }
+
+                for (let s of stars) { s.x -= s.speed * FIXED_DT * 60; if (s.x < -5) { s.x = W + 5;
+                        s.y = Math.random() * GROUND_Y; } }
+                for (let i = particles.length - 1; i >= 0; i--) {
+                    let p = particles[i];
+                    p.x += p.vx;
+                    p.y += p.vy;
+                    p.life -= p.decay;
+                    if (p.life <= 0) particles.splice(i, 1);
+                }
+                if (particles.length > 200) particles.splice(0, particles.length - 200);
+                flashAlpha = Math.max(0, flashAlpha - 0.04);
+                shakeAmount = Math.max(0, shakeAmount - 0.6);
+
+                if (gameState === STATE.PLAYING || gameState === STATE.BOSS) {
+                    const isBoss = gameState === STATE.BOSS;
+                    const spd = isBoss ? 7.0 : speed;
+
+                    player.vy += GRAVITY;
+                    player.y += player.vy;
+                    if (player.y + player.height >= GROUND_Y) {
+                        player.y = GROUND_Y - player.height;
+                        player.vy = 0;
+                        player.grounded = true;
+                        player.doubleJumpAvailable = true;
+                    } else player.grounded = false;
+                    if (activeEffects['tripleJump'] && activeEffects['tripleJump'] > 0) extraJumpsActive = true;
+                    else extraJumpsActive = false;
+
+                    if (spd > 6 && Math.random() < 0.3) speedLines.push({
+                        x: Math.random() * W,
+                        y: Math.random() * GROUND_Y,
+                        length: 20 + Math.random() * 60,
+                        life: 1,
+                        decay: 0.02 + spd * 0.005
+                    });
+                    for (let i = speedLines.length - 1; i >= 0; i--) {
+                        let l = speedLines[i];
+                        l.x -= spd * 1.2;
+                        l.life -= l.decay;
+                        if (l.life <= 0 || l.x + l.length < -20) speedLines.splice(i, 1);
+                    }
+                    if (speedLines.length > 100) speedLines.splice(0, speedLines.length - 100);
+
+                    if (!isBoss) {
+                        const delay = Math.max(0.4, BASE_SPAWN_DELAY_SEC - spd * 0.055);
+                        spawnTimer += FIXED_DT;
+                        if (spawnTimer >= delay) { spawnTimer = 0;
+                            spawnObstacle(); }
+                        coinSpawnTimer += FIXED_DT;
+                        if (coinSpawnTimer >= COIN_SPAWN_DELAY_SEC) { coinSpawnTimer = 0; if (Math.random() <
+                                0.6) spawnCoin(); }
+
+                        for (let i = obstacles.length - 1; i >= 0; i--) {
+                            let o = obstacles[i];
+                            o.x -= spd;
+                            if (o.type === 'wave') o.y = o.baseY + Math.sin(performance.now() / 1000 * o.freq + o
+                                .phase) * o.amplitude;
+                            if (o.x + o.width < -20) { obstacles.splice(i, 1); continue; }
+                        }
+                        for (let c of coins) c.x -= spd;
+                        coins = coins.filter(c => c.x + c.width > -20);
+
+                        let magnetRange = activeEffects['coinMagnet'] ? 40 : 12;
+                        for (let i = coins.length - 1; i >= 0; i--) {
+                            let c = coins[i];
+                            if (!c.collected) {
+                                let dx = (player.x + player.width / 2) - (c.x + c.width / 2);
+                                let dy = (player.y + player.height / 2) - (c.y + c.height / 2);
+                                if (Math.sqrt(dx * dx + dy * dy) < magnetRange) { c.collected = true;
+                                    runCoins++;
+                                    sfxCoin();
+                                    coins.splice(i, 1); }
+                            }
+                        }
+
+                        for (let o of obstacles) {
+                            if (!o.counted && o.x + o.width < player.x) {
+                                o.counted = true;
+                                let pts = activeEffects['doubleScore'] ? 2 : 1;
+                                score += pts;
+                                runCoins++;
+                                scoreThisLevel++;
+                                const maxSpeed = baseSpeed + (LEVEL_SPEED_BOOST * (level - 1));
+                                speed = Math.min(maxSpeed, baseSpeed + scoreThisLevel * SPEED_INC_PER_SCORE);
+                                if (scoreThisLevel >= SCORE_PER_LEVEL) advanceLevel();
+                                if (score > 0 && score % CHECKPOINT_INTERVAL === 0 && !checkpointActive)
+                                    setCheckpoint();
+                            }
+                            if (checkCollision(player.x, player.y, player.width, player.height, o.x, o.y, o.width, o
+                                    .height)) {
+                                if (checkpointActive || (activeEffects['shield'] && activeEffects['shield'] > 0)) {
+                                    obstacles.splice(obstacles.indexOf(o), 1);
+                                    flashAlpha = 0.4;
+                                    continue;
+                                }
+                                die();
+                                return;
+                            }
+                        }
+                    } else {
+                        bossSpawnTimer += FIXED_DT;
+                        if (bossSpawnTimer >= bossSpawnCooldown && bossActiveObstaclesSpawned <
+                            BOSS_REQUIRED_DODGES * 2) {
+                            bossSpawnTimer = 0;
+                            spawnBossObstacle();
+                        }
+                        for (let i = bossObstacles.length - 1; i >= 0; i--) {
+                            let o = bossObstacles[i];
+                            switch (o.type) {
+                                case 'spike':
+                                    o.x -= 4.5;
+                                    o.y = (GROUND_Y - o.height) - Math.sin(performance.now() / 1000 * 3 + o.phase) *
+                                        15;
+                                    break;
+                                case 'orb':
+                                    o.x -= 4.5;
+                                    o.y = o.baseY + Math.sin(performance.now() / 1000 * o.freq + o.phase) * o.amplitude;
+                                    break;
+                                case 'falling':
+                                    o.y += o.vy;
+                                    break;
+                                case 'homing':
+                                    o.x -= 4;
+                                    const targetY = player.y + player.height / 2;
+                                    const dy = targetY - (o.y + o.height / 2);
+                                    if (Math.abs(dy) > 1) o.y += Math.sign(dy) * o.speed;
+                                    break;
+                            }
+                            if (o.x + o.width < -20 || o.y > H + 30) {
+                                if (o.x + o.width < -20) { bossDodged++;
+                                    sfxBossDodge(); if (bossDodged >= BOSS_REQUIRED_DODGES) { winBoss(); return; } }
+                                bossObstacles.splice(i, 1);
+                                continue;
+                            }
+                            if (checkCollision(player.x, player.y, player.width, player.height, o.x, o.y, o.width, o
+                                    .height)) {
+                                if (activeEffects['shield'] && activeEffects['shield'] > 0) {
+                                    bossObstacles.splice(i, 1);
+                                    flashAlpha = 0.4;
+                                    continue;
+                                }
+                                die();
+                                return;
+                            }
+                        }
+                        bossEntity.vibrate = Math.max(0, bossEntity.vibrate - 0.1);
+                        if (Math.random() < 0.05) bossEntity.vibrate = 3;
+                    }
+                }
+            }
+
+            function checkCollision(px, py, pw, ph, ox, oy, ow, oh) {
+                return px < ox + ow && px + pw > ox && py < oy + oh && py + ph > oy;
+            }
+
+            // ---------- DRAWING ----------
+            function drawButton(x, y, w, h, color, text) {
+                ctx.fillStyle = color;
+                ctx.shadowColor = color;
+                ctx.shadowBlur = 8;
+                ctx.fillRect(x, y, w, h);
+                ctx.shadowBlur = 0;
+                ctx.font = 'bold 12px "Courier New"';
+                ctx.textAlign = 'center';
+                ctx.fillStyle = '#fff';
+                ctx.fillText(text, x + w / 2, y + h / 2 + 4);
+            }
+
+            function drawMenu() {
+                ctx.clearRect(0, 0, W, H);
+                const bg = ctx.createLinearGradient(0, 0, 0, H);
+                bg.addColorStop(0, '#0a0a20');
+                bg.addColorStop(1, '#151530');
+                ctx.fillStyle = bg;
+                ctx.fillRect(0, 0, W, H);
+                ctx.font = 'bold 24px "Courier New"';
+                ctx.textAlign = 'center';
+                ctx.fillStyle = '#0ff';
+                ctx.shadowColor = '#0ff';
+                ctx.shadowBlur = 12;
+                ctx.fillText('NEON GAUNTLET', W / 2, 55);
+                ctx.shadowBlur = 0;
+                const av = getAvatar();
+                ctx.font = '13px';
+                ctx.fillStyle = '#aaa';
+                ctx.fillText(`Coins: ${playerCoins}  |  Best: ${highScore}`, W / 2, 85);
+                ctx.fillText(`Avatar: ${av.name} (${av.shape})`, W / 2, 105);
+                drawButton(W / 2 - 70, 130, 140, 32, '#00cc44', 'PLAY');
+                drawButton(W / 2 - 70, 170, 140, 32, '#ffaa00', 'SHOP');
+                drawButton(W / 2 - 70, 210, 140, 32, '#00aaff', 'LEADERBOARD');
+                let bossLabel = bossDefeated ? 'BOSS (DEFEATED)' : (bossAttemptRemaining ? 'BOSS (FREE RETRY)' :
+                    `BOSS (${BOSS_ENTRY_FEE} coins)`);
+                drawButton(W / 2 - 70, 250, 140, 32, bossDefeated ? '#666' : '#ff4444', bossLabel);
+            }
+
+            function drawShop() {
+                ctx.clearRect(0, 0, W, H);
+                const bg = ctx.createLinearGradient(0, 0, 0, H);
+                bg.addColorStop(0, '#0a0a20');
+                bg.addColorStop(1, '#151530');
+                ctx.fillStyle = bg;
+                ctx.fillRect(0, 0, W, H);
+                ctx.font = 'bold 22px "Courier New"';
+                ctx.textAlign = 'center';
+                ctx.fillStyle = '#ffaa00';
+                ctx.fillText('SHOP', W / 2, 35);
+                ctx.font = '12px';
+                ctx.fillStyle = '#aaa';
+                ctx.fillText(
+                    `Coins: ${playerCoins} | Slots: ${abilitySlots} | Equipped: ${equippedAbilities.length}/${abilitySlots}`,
+                    W / 2, 55);
+                let y = 75;
+                for (let key in ABILITY_DEFS) {
+                    const a = ABILITY_DEFS[key];
+                    const lvl = getAbilityLevel(key);
+                    const owned = lvl > 0;
+                    const equipped = equippedAbilities.includes(key);
+                    const nextLevel = lvl + 1;
+                    const canUpgrade = nextLevel <= a.maxLevel;
+                    const upgradeCost = canUpgrade ? getAbilityUpgradeCost(key) : 0;
+                    const canEquip = owned && !equipped && equippedAbilities.length < abilitySlots;
+                    const canUnequip = equipped;
+                    ctx.font = '11px';
+                    ctx.fillStyle = owned ? (equipped ? '#0f0' : '#888') : '#ffaa00';
+                    ctx.fillText(`${a.name} Lv${lvl} - ${a.desc}`, W / 2, y + 10);
+                    if (owned) {
+                        ctx.fillStyle = '#aaa';
+                        ctx.font = '9px';
+                        ctx.fillText(`CD:${getAbilityCooldown(key)}s Dur:${getAbilityDuration(key)}s`, W / 2, y + 22);
+                    }
+                    if (!owned) drawButton(W / 2 - 40, y + 15, 80, 22, '#00cc44', `BUY ${a.baseCost}`);
+                    else if (canUpgrade) drawButton(W / 2 - 40, y + 15, 80, 22, '#00cc44', `UPGRADE ${upgradeCost}`);
+                    if (canEquip) drawButton(W / 2 + 40, y + 15, 80, 22, '#00aaff', 'EQUIP');
+                    else if (canUnequip) drawButton(W / 2 + 40, y + 15, 80, 22, '#ff4444', 'UNEQUIP');
+                    y += 40;
+                }
+                drawButton(20, H - 45, 80, 30, '#444', 'BACK');
+            }
+
+            function drawLeaderboard() {
+                ctx.clearRect(0, 0, W, H);
+                const bg = ctx.createLinearGradient(0, 0, 0, H);
+                bg.addColorStop(0, '#0a0a20');
+                bg.addColorStop(1, '#151530');
+                ctx.fillStyle = bg;
+                ctx.fillRect(0, 0, W, H);
+                ctx.font = 'bold 20px "Courier New"';
+                ctx.textAlign = 'center';
+                ctx.fillStyle = '#0ff';
+                ctx.shadowColor = '#0ff';
+                ctx.shadowBlur = 10;
+                drawButton(W / 2 - 100, 50, 100, 25, '#555', 'LOCAL');
+                drawButton(W / 2, 50, 100, 25, '#555', 'GLOBAL');
+                ctx.fillStyle = '#fff';
+                ctx.font = 'bold 14px "Courier New"';
+                let activeTab = window.leaderboardTab || 'local';
+                if (activeTab === 'local') {
+                    ctx.fillText('TOP 10 (LOCAL)', W / 2, 35);
+                    ctx.font = '12px';
+                    let y = 80;
+                    for (let i = 0; i < 10; i++) {
+                        ctx.fillStyle = i === 0 ? '#ffd700' : '#aaa';
+                        ctx.fillText(`${i+1}. ${leaderboard[i]||'-'}`, W / 2, y);
+                        y += 22;
+                    }
                 } else {
-                    if (playerCoins < BOSS_ENTRY_FEE) return false;
-                    playerCoins -= BOSS_ENTRY_FEE; bossAttemptRemaining = true;
-                    bossLives = MAX_BOSS_LIVES; bossDodged = 0;
+                    ctx.fillText('GLOBAL SHARED SCORES', W / 2, 35);
+                    ctx.font = '12px';
+                    let y = 80;
+                    const list = sharedScores.slice(0, 10);
+                    for (let i = 0; i < list.length; i++) {
+                        ctx.fillStyle = i === 0 ? '#ffd700' : '#aaa';
+                        ctx.fillText(`${i+1}. ${list[i]}`, W / 2, y);
+                        y += 22;
+                    }
+                    if (list.length === 0) ctx.fillText('No shared scores yet', W / 2, 100);
+                }
+                drawButton(20, H - 45, 80, 30, '#444', 'BACK');
+            }
+
+            function drawPlayerShape() {
+                const av = getAvatar();
+                ctx.fillStyle = av.color;
+                ctx.shadowColor = av.glow;
+                ctx.shadowBlur = 12;
+                const cx = player.x + player.width / 2,
+                    cy = player.y + player.height / 2,
+                    w = player.width,
+                    h = player.height;
+                ctx.beginPath();
+                switch (av.shape) {
+                    case 'square':
+                        ctx.rect(player.x, player.y, w, h);
+                        break;
+                    case 'diamond':
+                        ctx.moveTo(cx, player.y);
+                        ctx.lineTo(player.x + w, cy);
+                        ctx.lineTo(cx, player.y + h);
+                        ctx.lineTo(player.x, cy);
+                        break;
+                    case 'circle':
+                        ctx.arc(cx, cy, w / 2, 0, Math.PI * 2);
+                        break;
+                    case 'star5':
+                        const spikes = 5,
+                            outer = w / 2,
+                            inner = w / 4;
+                        let rot = Math.PI / 2 * 3,
+                            step = Math.PI / spikes;
+                        for (let i = 0; i < spikes; i++) {
+                            ctx.lineTo(cx + Math.cos(rot) * outer, cy + Math.sin(rot) * outer);
+                            rot += step;
+                            ctx.lineTo(cx + Math.cos(rot) * inner, cy + Math.sin(rot) * inner);
+                            rot += step;
+                        }
+                        break;
+                    case 'hexagon':
+                        const sides = 6,
+                            r = w / 2;
+                        for (let i = 0; i < sides; i++) {
+                            let ang = Math.PI / 2 + i * 2 * Math.PI / sides;
+                            i === 0 ? ctx.moveTo(cx + r * Math.cos(ang), cy + r * Math.sin(ang)) : ctx.lineTo(cx + r * Math
+                                .cos(ang), cy + r * Math.sin(ang));
+                        }
+                        break;
+                    case 'star8':
+                        const p8 = 8,
+                            or8 = w / 2,
+                            ir8 = w / 3.5;
+                        for (let i = 0; i < p8 * 2; i++) {
+                            let ang = Math.PI / 2 - i * Math.PI / p8;
+                            let rad = i % 2 === 0 ? or8 : ir8;
+                            let x = cx + Math.cos(ang) * rad,
+                                y = cy - Math.sin(ang) * rad;
+                            i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+                        }
+                        break;
+                    case 'decagon':
+                        const ds = 10,
+                            dr = w / 2;
+                        for (let i = 0; i < ds; i++) {
+                            let ang = Math.PI / 2 + i * 2 * Math.PI / ds;
+                            let x = cx + dr * Math.cos(ang),
+                                y = cy + dr * Math.sin(ang);
+                            i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+                        }
+                        break;
+                }
+                ctx.closePath();
+                ctx.fill();
+                ctx.shadowBlur = 0;
+                ctx.shadowColor = 'transparent';
+                if (checkpointActive) {
+                    ctx.strokeStyle = '#fff';
+                    ctx.lineWidth = 3;
+                    ctx.shadowColor = '#fff';
+                    ctx.shadowBlur = 12;
+                    ctx.beginPath();
+                    ctx.arc(cx, cy, w / 2 + 6, 0, Math.PI * 2);
+                    ctx.stroke();
+                }
+            }
+
+            function drawGameOverlay() {
+                ctx.clearRect(0, 0, W, H);
+                const grad = ctx.createLinearGradient(0, 0, 0, H);
+                grad.addColorStop(0, currentTheme.bg[0]);
+                grad.addColorStop(1, currentTheme.bg[1]);
+                ctx.fillStyle = grad;
+                ctx.fillRect(0, 0, W, H);
+                ctx.fillStyle = currentTheme.stars;
+                ctx.shadowColor = currentTheme.stars;
+                ctx.shadowBlur = 3;
+                for (let s of stars) {
+                    ctx.beginPath();
+                    ctx.arc(s.x, s.y, s.radius, 0, Math.PI * 2);
+                    ctx.fill();
+                }
+                ctx.shadowBlur = 0;
+                ctx.strokeStyle = 'rgba(255,255,255,0.2)';
+                ctx.lineWidth = 1.5;
+                for (let l of speedLines) {
+                    ctx.globalAlpha = l.life * 0.7;
+                    ctx.beginPath();
+                    ctx.moveTo(l.x, l.y);
+                    ctx.lineTo(l.x + l.length, l.y);
+                    ctx.stroke();
+                }
+                ctx.globalAlpha = 1;
+                ctx.beginPath();
+                ctx.strokeStyle = currentTheme.ground;
+                ctx.lineWidth = 2;
+                ctx.shadowColor = currentTheme.ground;
+                ctx.shadowBlur = 8;
+                const dash = 30,
+                    gap = 15,
+                    total = dash + gap,
+                    off = (performance.now() * speed * 0.03) % total;
+                for (let x = -off; x < W + total; x += total) {
+                    ctx.moveTo(x, GROUND_Y);
+                    ctx.lineTo(x + dash, GROUND_Y);
+                }
+                ctx.stroke();
+                ctx.shadowBlur = 0;
+                const obsArray = gameState === STATE.BOSS ? bossObstacles : obstacles;
+                for (let o of obsArray) {
+                    ctx.fillStyle = gameState === STATE.BOSS ? '#ff8800' : currentTheme.obs;
+                    ctx.shadowColor = ctx.fillStyle;
+                    ctx.shadowBlur = 10;
+                    if (o.type === 'orb' || o.type === 'homing') {
+                        ctx.beginPath();
+                        ctx.arc(o.x + o.width / 2, o.y + o.height / 2, o.width / 2, 0, Math.PI * 2);
+                        ctx.fill();
+                    } else ctx.fillRect(o.x, o.y, o.width, o.height);
+                }
+                if (gameState !== STATE.BOSS) {
+                    for (let c of coins) {
+                        let bob = Math.sin(performance.now() / 200 + c.bobPhase) * 2;
+                        ctx.fillStyle = '#ffd700';
+                        ctx.shadowColor = '#ffd700';
+                        ctx.shadowBlur = 8;
+                        ctx.beginPath();
+                        ctx.arc(c.x + c.width / 2, c.y + c.height / 2 + bob, c.width / 2, 0, Math.PI * 2);
+                        ctx.fill();
+                    }
+                }
+                if (gameState === STATE.BOSS) {
+                    const bx = bossEntity.x + (Math.random() - 0.5) * bossEntity.vibrate,
+                        by = bossEntity.y + (Math.random() - 0.5) * bossEntity.vibrate;
+                    ctx.fillStyle = '#ff3333';
+                    ctx.shadowColor = '#ff3333';
+                    ctx.shadowBlur = 20;
+                    ctx.fillRect(bx, by, bossEntity.width, bossEntity.height);
+                }
+                ctx.shadowBlur = 0;
+                drawPlayerShape();
+                if (!player.grounded && (player.doubleJumpAvailable || extraJumpsActive)) {
+                    ctx.fillStyle = '#fff';
+                    ctx.shadowColor = '#fff';
+                    ctx.shadowBlur = 8;
+                    ctx.beginPath();
+                    ctx.arc(player.x + player.width / 2, player.y - 8, 3, 0, Math.PI * 2);
+                    ctx.fill();
+                }
+                ctx.shadowBlur = 0;
+                for (let p of particles) {
+                    ctx.globalAlpha = p.life;
+                    ctx.fillStyle = p.color;
+                    ctx.shadowColor = p.color;
+                    ctx.shadowBlur = 6;
+                    ctx.fillRect(p.x, p.y, p.size, p.size);
+                }
+                ctx.globalAlpha = 1;
+
+                if (gameState === STATE.PLAYING && !paused) {
+                    ctx.fillStyle = 'rgba(0,0,0,0.5)';
+                    ctx.fillRect(W - 45, 10, 35, 35);
+                    ctx.fillStyle = '#fff';
+                    ctx.font = '24px "Courier New"';
+                    ctx.textAlign = 'center';
+                    ctx.textBaseline = 'middle';
+                    ctx.fillText('⏸', W - 27, 27);
+                }
+            }
+
+            function drawPauseOverlay() {
+                ctx.fillStyle = 'rgba(0,0,0,0.75)';
+                ctx.fillRect(0, 0, W, H);
+                ctx.font = 'bold 28px "Courier New"';
+                ctx.textAlign = 'center';
+                ctx.fillStyle = '#fff';
+                ctx.fillText('PAUSED', W / 2, H / 2 - 30);
+                drawButton(W / 2 - 60, H / 2, 120, 45, '#00cc44', 'RESUME');
+            }
+
+            function drawHUD() {
+                ctx.font = 'bold 18px "Courier New"';
+                ctx.textAlign = 'center';
+                ctx.fillStyle = '#fff';
+                ctx.fillText(`${score}`, W / 2, 45);
+                ctx.font = '12px';
+                ctx.fillText(`LVL ${level}`, W / 2, 65);
+                if (gameState === STATE.BOSS) ctx.fillText(`BOSS: ${bossDodged}/${BOSS_REQUIRED_DODGES}  LIVES: ${bossLives}`,
+                    W / 2, 105);
+                else if (gameState === STATE.PLAYING && level >= 6) ctx.fillText('CHAOS MODE', W / 2, 85);
+                let cdY = 85;
+                for (let key of equippedAbilities) {
+                    if (abilityCooldowns[key] && abilityCooldowns[key] > 0) {
+                        ctx.fillStyle = '#ff8888';
+                        ctx.font = '10px';
+                        ctx.fillText(`${ABILITY_DEFS[key].name}: ${Math.ceil(abilityCooldowns[key])}s`, W / 2, cdY);
+                        cdY += 15;
+                    }
+                }
+                if (checkpointActive) {
+                    ctx.fillStyle = '#ffffff';
+                    ctx.font = 'bold 12px';
+                    ctx.fillText(`CHECKPOINT: ${Math.ceil(checkpointTimer)}s`, W / 2, cdY);
+                }
+                if (levelUpText) {
+                    ctx.font = 'bold 20px "Courier New"';
+                    ctx.fillStyle = '#ffd700';
+                    ctx.shadowColor = '#ffd700';
+                    ctx.shadowBlur = 10;
+                    ctx.fillText(levelUpText, W / 2, H / 2 - 60);
+                    ctx.shadowBlur = 0;
+                }
+            }
+
+            function draw() {
+                const sx = shakeAmount ? (Math.random() - 0.5) * shakeAmount : 0;
+                const sy = shakeAmount ? (Math.random() - 0.5) * shakeAmount : 0;
+                ctx.save();
+                ctx.translate(sx, sy);
+                if (gameState === STATE.MENU) drawMenu();
+                else if (gameState === STATE.SHOP) drawShop();
+                else if (gameState === STATE.LEADERBOARD) drawLeaderboard();
+                else if (gameState === STATE.PLAYING || gameState === STATE.BOSS) {
+                    drawGameOverlay();
+                    drawHUD();
+                    if (gameState === STATE.PLAYING && paused) drawPauseOverlay();
+                } else if (gameState === STATE.GAMEOVER) {
+                    drawGameOverlay();
+                    drawHUD();
+                    ctx.fillStyle = 'rgba(0,0,0,0.7)';
+                    ctx.fillRect(0, 0, W, H);
+                    ctx.font = 'bold 22px';
+                    ctx.textAlign = 'center';
+                    ctx.fillStyle = '#fff';
+                    ctx.fillText('GAME OVER', W / 2, H / 2 - 40);
+                    ctx.font = '14px';
+                    ctx.fillText(`Score: ${score}  Coins: ${runCoins}`, W / 2, H / 2 - 10);
+                    ctx.fillText(`Total coins: ${playerCoins}`, W / 2, H / 2 + 20);
+                    ctx.fillText('TAP TO CONTINUE', W / 2, H / 2 + 55);
+                }
+                ctx.restore();
+                jumpBtn.style.display = (gameState === STATE.PLAYING && !paused) || gameState === STATE.BOSS ? 'flex' :
+                    'none';
+                abilityBtn.style.display = (gameState === STATE.PLAYING && !paused) || gameState === STATE.BOSS ? 'flex' :
+                    'none';
+                shareBtn.style.display = (gameState === STATE.GAMEOVER) ? 'block' : 'none';
+                muteBtn.textContent = muted ? '🔇' : '🔊';
+            }
+
+            function getCanvasCoords(e) {
+                const r = canvas.getBoundingClientRect();
+                return {
+                    x: (e.clientX - r.left) * W / r.width,
+                    y: (e.clientY - r.top) * H / r.height
+                };
+            }
+
+            function performJump() {
+                if ((gameState !== STATE.PLAYING && gameState !== STATE.BOSS) || paused) return;
+                if (player.grounded) {
+                    player.vy = JUMP_VEL;
+                    player.grounded = false;
+                    player.doubleJumpAvailable = true;
+                    sfxJump();
+                } else if (player.doubleJumpAvailable) {
+                    player.vy = DOUBLE_JUMP_VEL;
+                    player.doubleJumpAvailable = false;
+                    sfxJump();
+                } else if (extraJumpsActive) {
+                    player.vy = DOUBLE_JUMP_VEL;
+                    sfxJump();
+                }
+            }
+
+            canvas.addEventListener('mousedown', e => {
+                const c = getCanvasCoords(e);
+                handleCanvasClick(c.x, c.y);
+            });
+            canvas.addEventListener('touchstart', e => {
+                e.preventDefault();
+                const t = e.touches[0];
+                const c = getCanvasCoords(t);
+                handleCanvasClick(c.x, c.y);
+            }, { passive: false });
+
+            jumpBtn.addEventListener('mousedown', e => { e.stopPropagation();
+                performJump(); });
+            jumpBtn.addEventListener('touchstart', e => { e.stopPropagation();
+                performJump(); });
+
+            abilityBtn.addEventListener('mousedown', e => { e.stopPropagation();
+                activateEquippedAbility(); });
+            abilityBtn.addEventListener('touchstart', e => { e.stopPropagation();
+                activateEquippedAbility(); });
+
+            muteBtn.addEventListener('click', () => {
+                muted = !muted;
+                saveData();
+                if (muted) stopMusic();
+                else if (gameState === STATE.PLAYING || gameState === STATE.BOSS) startMusic();
+            });
+
+            shareBtn.addEventListener('click', () => {
+                if (gameState === STATE.GAMEOVER && score > 0) {
+                    const url = new URL(window.location.href);
+                    url.searchParams.set('score', score);
+                    const urlStr = url.toString();
+                    if (navigator.share) {
+                        navigator.share({
+                            title: 'Neon Gauntlet Score',
+                            text: `I scored ${score} in Neon Gauntlet!`,
+                            url: urlStr
+                        });
+                    } else {
+                        navigator.clipboard.writeText(urlStr).then(() => alert(
+                            'Score link copied! Share it with friends.'));
+                    }
+                }
+            });
+
+            document.addEventListener('keydown', e => {
+                if (e.code === 'Space' || e.key === ' ') {
+                    e.preventDefault();
+                    if (gameState === STATE.GAMEOVER) { gameState = STATE.MENU;
+                        stopMusic(); } else performJump();
+                }
+                if (e.code === 'KeyE' && !paused) { e.preventDefault();
+                    activateEquippedAbility(); }
+                if ((e.code === 'KeyP' || e.code === 'Escape') && gameState === STATE.PLAYING) {
+                    e.preventDefault();
+                    paused = !paused;
+                    if (paused) stopMusic();
+                    else startMusic();
+                }
+            });
+
+            function activateEquippedAbility() {
+                if (equippedAbilities.length === 0) return;
+                for (let key of equippedAbilities) {
+                    if (!abilityCooldowns[key] || abilityCooldowns[key] <= 0) {
+                        activateAbility(key);
+                        return;
+                    }
+                }
+            }
+
+            window.leaderboardTab = 'local';
+
+            function handleCanvasClick(mx, my) {
+                if (gameState === STATE.PLAYING && !paused && mx >= W - 45 && mx <= W - 10 && my >= 10 && my <= 45) {
+                    paused = true;
+                    stopMusic();
+                    return;
+                }
+                if (gameState === STATE.PLAYING && paused) {
+                    if (mx >= W / 2 - 60 && mx <= W / 2 + 60 && my >= H / 2 && my <= H / 2 + 45) {
+                        paused = false;
+                        startMusic();
+                        return;
+                    }
+                    paused = false;
+                    startMusic();
+                    return;
+                }
+                if (gameState === STATE.GAMEOVER) { gameState = STATE.MENU;
+                    stopMusic(); return; }
+
+                const buttons = getCurrentButtons();
+                for (let b of buttons) {
+                    if (mx >= b.x && mx <= b.x + b.w && my >= b.y && my <= b.y + b.h) {
+                        handleButton(b.id);
+                        return;
+                    }
+                }
+                if (gameState === STATE.PLAYING || gameState === STATE.BOSS) performJump();
+            }
+
+            function getCurrentButtons() {
+                if (gameState === STATE.MENU) {
+                    return [
+                        { id: 'play', x: W / 2 - 70, y: 130, w: 140, h: 32 },
+                        { id: 'shop', x: W / 2 - 70, y: 170, w: 140, h: 32 },
+                        { id: 'leaderboard', x: W / 2 - 70, y: 210, w: 140, h: 32 },
+                        { id: 'boss', x: W / 2 - 70, y: 250, w: 140, h: 32 }
+                    ];
+                } else if (gameState === STATE.SHOP) {
+                    const btns = [];
+                    let y = 75;
+                    for (let key in ABILITY_DEFS) {
+                        const a = ABILITY_DEFS[key];
+                        const lvl = getAbilityLevel(key);
+                        const owned = lvl > 0;
+                        const equipped = equippedAbilities.includes(key);
+                        const canUpgrade = owned && (lvl + 1 <= a.maxLevel);
+                        if (!owned) btns.push({ id: 'buy_' + key, x: W / 2 - 40, y: y + 15, w: 80, h: 22 });
+                        else if (canUpgrade) btns.push({ id: 'upgrade_' + key, x: W / 2 - 40, y: y + 15, w: 80, h: 22 });
+                        if (owned && !equipped && equippedAbilities.length < abilitySlots) btns.push({ id: 'equip_' + key,
+                            x: W / 2 + 40, y: y + 15, w: 80, h: 22 });
+                        else if (equipped) btns.push({ id: 'unequip_' + key, x: W / 2 + 40, y: y + 15, w: 80, h: 22 });
+                        y += 40;
+                    }
+                    btns.push({ id: 'back', x: 20, y: H - 45, w: 80, h: 30 });
+                    return btns;
+                } else if (gameState === STATE.LEADERBOARD) {
+                    return [
+                        { id: 'tab_local', x: W / 2 - 100, y: 50, w: 100, h: 25 },
+                        { id: 'tab_global', x: W / 2, y: 50, w: 100, h: 25 },
+                        { id: 'back', x: 20, y: H - 45, w: 80, h: 30 }
+                    ];
+                }
+                return [];
+            }
+
+            function handleButton(id) {
+                if (id === 'play') { resetRun();
+                    gameState = STATE.PLAYING;
+                    startMusic(); } else if (id === 'shop') { gameState = STATE.SHOP;
+                    stopMusic(); } else if (id === 'leaderboard') { gameState = STATE.LEADERBOARD;
+                    stopMusic(); } else if (id === 'boss' && !bossDefeated) startBoss(false);
+                else if (id === 'back') { gameState = STATE.MENU;
+                    bossAttemptRemaining = false;
+                    saveData(); } else if (id === 'tab_local') { window.leaderboardTab = 'local';
+                    gameState = STATE.LEADERBOARD; } else if (id === 'tab_global') { window.leaderboardTab = 'global';
+                    gameState = STATE.LEADERBOARD; } else if (id.startsWith('buy_')) {
+                    const k = id.substring(4);
+                    if (!abilitiesData[k]?.level && playerCoins >= ABILITY_DEFS[k].baseCost) {
+                        playerCoins -= ABILITY_DEFS[k].baseCost;
+                        abilitiesData[k] = { level: 1 };
+                        saveData();
+                    }
+                } else if (id.startsWith('upgrade_')) {
+                    const k = id.substring(8);
+                    const lvl = getAbilityLevel(k);
+                    if (lvl < ABILITY_DEFS[k].maxLevel && playerCoins >= getAbilityUpgradeCost(k)) {
+                        playerCoins -= getAbilityUpgradeCost(k);
+                        abilitiesData[k].level++;
+                        saveData();
+                    }
+                } else if (id.startsWith('equip_')) {
+                    const k = id.substring(6);
+                    if (!equippedAbilities.includes(k) && equippedAbilities.length < abilitySlots) {
+                        equippedAbilities.push(k);
+                        saveData();
+                    }
+                } else if (id.startsWith('unequip_')) {
+                    const k = id.substring(8);
+                    equippedAbilities = equippedAbilities.filter(a => a !== k);
                     saveData();
                 }
             }
-            bossObstacles = []; bossSpawnTimer = 0; bossSpawnCooldown = 30/60; bossActiveObstaclesSpawned = 0;
-            bossEntity.x = W-80; bossEntity.y = 60; bossEntity.vibrate = 0;
-            player.y = GROUND_Y - PLAYER_H; player.vy = 0; player.grounded = true; player.doubleJumpAvailable = true;
-            extraJumpsActive = false;
-            abilityCooldowns = {}; activeEffects = {};
-            gameState = STATE.BOSS; startMusic(); return true;
-        }
 
-        function spawnBossObstacle() {
-            const phase = Math.floor(Math.random() * 4);
-            switch(phase) {
-                case 0: const spikeH = 25+Math.random()*20; bossObstacles.push({ x:W, y:GROUND_Y-spikeH, width:18, height:spikeH, type:'spike', phase:Math.random()*Math.PI*2 }); break;
-                case 1: bossObstacles.push({ x:W, y:100+Math.random()*80, width:20, height:20, type:'orb', baseY:100+Math.random()*80, amplitude:40+Math.random()*40, freq:2+Math.random()*2, phase:Math.random()*Math.PI*2 }); break;
-                case 2: bossObstacles.push({ x:150+Math.random()*200, y:-30, width:16, height:16, type:'falling', vy:3+Math.random()*3 }); break;
-                case 3: bossObstacles.push({ x:W, y:player.y+(Math.random()-0.5)*60, width:14, height:14, type:'homing', speed:1.5+Math.random()*1.5 }); break;
-            }
-            bossActiveObstaclesSpawned++;
-            bossSpawnCooldown = Math.max(12/60, (30 - bossDodged * 0.3) / 60);
-        }
+            // ---------- INIT ----------
+            loadData();
+            loadLeaderboard();
+            loadSharedScores();
+            checkURLForScore();
+            stars = [];
+            for (let i = 0; i < STAR_COUNT; i++) stars.push({
+                x: Math.random() * W,
+                y: Math.random() * GROUND_Y,
+                speed: 0.5 + Math.random() * 2,
+                radius: 0.5 + Math.random() * 1.8
+            });
+            document.addEventListener('touchstart', resumeAudio, { once: true });
+            document.addEventListener('mousedown', resumeAudio, { once: true });
 
-        function activateAbility(key) {
-            if (gameState !== STATE.PLAYING && gameState !== STATE.BOSS) return;
-            if (abilityCooldowns[key] && abilityCooldowns[key] > 0) return;
-            if (!equippedAbilities.includes(key)) return;
-            const lvl = getAbilityLevel(key);
-            if (lvl <= 0) return;
-            const dur = getAbilityDuration(key);
-            const cd = getAbilityCooldown(key);
-            abilityCooldowns[key] = cd;
-            activeEffects[key] = dur;
-            flashAlpha = 0.3;
-            sfxAbility();
-            for (let i=0; i<8; i++) particles.push({ x:player.x+player.width/2, y:player.y+player.height/2, vx:(Math.random()-0.5)*4, vy:-Math.random()*3, life:0.6, decay:0.06, size:3+Math.random()*3, color:ABILITY_DEFS[key].color });
-        }
+            let accumulator = 0,
+                lastTime = 0;
 
-        // ---------- UPDATE ----------
-        function update() {
-            if (gameState === STATE.PLAYING && paused) return;
-
-            for (let key in abilityCooldowns) if (abilityCooldowns[key] > 0) abilityCooldowns[key] -= FIXED_DT;
-            for (let key in activeEffects) if (activeEffects[key] > 0) activeEffects[key] -= FIXED_DT; else delete activeEffects[key];
-            if (checkpointActive) {
-                checkpointTimer -= FIXED_DT;
-                if (checkpointTimer <= 0) { checkpointActive = false; checkpointData = null; }
-            }
-            if (levelUpTimer > 0) { levelUpTimer -= FIXED_DT; if (levelUpTimer <= 0) levelUpText = ''; }
-
-            for (let s of stars) { s.x -= s.speed * FIXED_DT * 60; if (s.x < -5) { s.x = W+5; s.y = Math.random()*GROUND_Y; } }
-            for (let i=particles.length-1; i>=0; i--) {
-                let p = particles[i];
-                p.x += p.vx; p.y += p.vy; p.life -= p.decay;
-                if (p.life <= 0) particles.splice(i,1);
-            }
-            if (particles.length > 200) particles.splice(0, particles.length - 200);
-            flashAlpha = Math.max(0, flashAlpha - 0.04);
-            shakeAmount = Math.max(0, shakeAmount - 0.6);
-
-            if (gameState === STATE.PLAYING || gameState === STATE.BOSS) {
-                const isBoss = gameState === STATE.BOSS;
-                const spd = isBoss ? 7.0 : speed;
-
-                player.vy += GRAVITY;
-                player.y += player.vy;
-                if (player.y + player.height >= GROUND_Y) {
-                    player.y = GROUND_Y - player.height; player.vy = 0; player.grounded = true; player.doubleJumpAvailable = true;
-                } else player.grounded = false;
-                if (activeEffects['tripleJump'] && activeEffects['tripleJump'] > 0) extraJumpsActive = true; else extraJumpsActive = false;
-
-                if (spd > 6 && Math.random() < 0.3) speedLines.push({ x:Math.random()*W, y:Math.random()*GROUND_Y, length:20+Math.random()*60, life:1, decay:0.02+spd*0.005 });
-                for (let i=speedLines.length-1; i>=0; i--) {
-                    let l = speedLines[i];
-                    l.x -= spd * 1.2; l.life -= l.decay;
-                    if (l.life <= 0 || l.x+l.length < -20) speedLines.splice(i,1);
+            function loop(time) {
+                if (!lastTime) lastTime = time;
+                let dt = (time - lastTime) / 1000;
+                if (dt > 0.1) dt = 0.1;
+                accumulator += dt;
+                while (accumulator >= FIXED_DT) {
+                    update();
+                    accumulator -= FIXED_DT;
                 }
-                if (speedLines.length > 100) speedLines.splice(0, speedLines.length-100);
-
-                if (!isBoss) {
-                    const delay = Math.max(0.4, BASE_SPAWN_DELAY_SEC - spd * 0.055);
-                    spawnTimer += FIXED_DT;
-                    if (spawnTimer >= delay) { spawnTimer = 0; spawnObstacle(); }
-                    coinSpawnTimer += FIXED_DT;
-                    if (coinSpawnTimer >= COIN_SPAWN_DELAY_SEC) { coinSpawnTimer = 0; if (Math.random()<0.6) spawnCoin(); }
-
-                    for (let i=obstacles.length-1; i>=0; i--) {
-                        let o = obstacles[i];
-                        o.x -= spd;
-                        if (o.type === 'wave') o.y = o.baseY + Math.sin(performance.now()/1000 * o.freq + o.phase) * o.amplitude;
-                        if (o.x + o.width < -20) { obstacles.splice(i,1); continue; }
-                    }
-                    for (let c of coins) c.x -= spd;
-                    coins = coins.filter(c => c.x + c.width > -20);
-
-                    let magnetRange = activeEffects['coinMagnet'] ? 40 : 12;
-                    for (let i=coins.length-1; i>=0; i--) {
-                        let c = coins[i];
-                        if (!c.collected) {
-                            let dx = (player.x+player.width/2) - (c.x+c.width/2);
-                            let dy = (player.y+player.height/2) - (c.y+c.height/2);
-                            if (Math.sqrt(dx*dx+dy*dy) < magnetRange) { c.collected = true; runCoins++; sfxCoin(); coins.splice(i,1); }
-                        }
-                    }
-
-                    for (let o of obstacles) {
-                        if (!o.counted && o.x + o.width < player.x) {
-                            o.counted = true;
-                            let pts = activeEffects['doubleScore'] ? 2 : 1;
-                            score += pts; runCoins++; scoreThisLevel++;
-                            const maxSpeed = baseSpeed + (LEVEL_SPEED_BOOST * (level-1));
-                            speed = Math.min(maxSpeed, baseSpeed + scoreThisLevel * SPEED_INC_PER_SCORE);
-                            if (scoreThisLevel >= SCORE_PER_LEVEL) advanceLevel();
-                            if (score > 0 && score % CHECKPOINT_INTERVAL === 0 && !checkpointActive) setCheckpoint();
-                        }
-                        if (checkCollision(player.x, player.y, player.width, player.height, o.x, o.y, o.width, o.height)) {
-                            if (checkpointActive || (activeEffects['shield'] && activeEffects['shield'] > 0)) {
-                                obstacles.splice(obstacles.indexOf(o),1); flashAlpha = 0.4; continue;
-                            }
-                            die(); return;
-                        }
-                    }
-                } else {
-                    bossSpawnTimer += FIXED_DT;
-                    if (bossSpawnTimer >= bossSpawnCooldown && bossActiveObstaclesSpawned < BOSS_REQUIRED_DODGES * 2) {
-                        bossSpawnTimer = 0; spawnBossObstacle();
-                    }
-                    for (let i=bossObstacles.length-1; i>=0; i--) {
-                        let o = bossObstacles[i];
-                        switch(o.type) {
-                            case 'spike': o.x -= 4.5; o.y = (GROUND_Y - o.height) - Math.sin(performance.now()/1000*3 + o.phase)*15; break;
-                            case 'orb': o.x -= 4.5; o.y = o.baseY + Math.sin(performance.now()/1000*o.freq + o.phase) * o.amplitude; break;
-                            case 'falling': o.y += o.vy; break;
-                            case 'homing': o.x -= 4; const targetY = player.y + player.height/2; const dy = targetY - (o.y+o.height/2); if(Math.abs(dy)>1) o.y += Math.sign(dy) * o.speed; break;
-                        }
-                        if (o.x + o.width < -20 || o.y > H+30) {
-                            if (o.x + o.width < -20) { bossDodged++; sfxBossDodge(); if (bossDodged >= BOSS_REQUIRED_DODGES) { winBoss(); return; } }
-                            bossObstacles.splice(i,1); continue;
-                        }
-                        if (checkCollision(player.x,player.y,player.width,player.height, o.x,o.y,o.width,o.height)) {
-                            if (activeEffects['shield'] && activeEffects['shield'] > 0) {
-                                bossObstacles.splice(i,1); flashAlpha=0.4; continue;
-                            }
-                            die(); return;
-                        }
-                    }
-                    bossEntity.vibrate = Math.max(0, bossEntity.vibrate - 0.1);
-                    if (Math.random() < 0.05) bossEntity.vibrate = 3;
-                }
+                draw();
+                lastTime = time;
+                requestAnimationFrame(loop);
             }
-        }
-
-        function checkCollision(px,py,pw,ph, ox,oy,ow,oh) { return px < ox+ow && px+pw > ox && py < oy+oh && py+ph > oy; }
-
-        // ... (drawing functions and input – same as before)
-
-        // I'm inserting the drawing and input code from the previous big version, unchanged except CSS.
-        function drawButton(x,y,w,h,color,text) {
-            ctx.fillStyle = color; ctx.shadowColor = color; ctx.shadowBlur = 8;
-            ctx.fillRect(x,y,w,h); ctx.shadowBlur = 0;
-            ctx.font = 'bold 12px "Courier New"'; ctx.textAlign='center'; ctx.fillStyle='#fff';
-            ctx.fillText(text, x+w/2, y+h/2+4);
-        }
-        function drawMenu() {
-            ctx.clearRect(0,0,W,H);
-            const bg = ctx.createLinearGradient(0,0,0,H); bg.addColorStop(0,'#0a0a20'); bg.addColorStop(1,'#151530');
-            ctx.fillStyle = bg; ctx.fillRect(0,0,W,H);
-            ctx.font = 'bold 24px "Courier New"'; ctx.textAlign='center'; ctx.fillStyle='#0ff'; ctx.shadowColor='#0ff'; ctx.shadowBlur=12;
-            ctx.fillText('NEON GAUNTLET', W/2, 55); ctx.shadowBlur=0;
-            const av = getAvatar();
-            ctx.font = '13px'; ctx.fillStyle = '#aaa';
-            ctx.fillText(`Coins: ${playerCoins}  |  Best: ${highScore}`, W/2, 85);
-            ctx.fillText(`Avatar: ${av.name} (${av.shape})`, W/2, 105);
-            drawButton(W/2-70,130,140,32,'#00cc44','PLAY');
-            drawButton(W/2-70,170,140,32,'#ffaa00','SHOP');
-            drawButton(W/2-70,210,140,32,'#00aaff','LEADERBOARD');
-            let bossLabel = bossDefeated ? 'BOSS (DEFEATED)' : (bossAttemptRemaining ? 'BOSS (FREE RETRY)' : `BOSS (${BOSS_ENTRY_FEE} coins)`);
-            drawButton(W/2-70,250,140,32, bossDefeated?'#666':'#ff4444', bossLabel);
-        }
-        function drawShop() {
-            ctx.clearRect(0,0,W,H); const bg = ctx.createLinearGradient(0,0,0,H); bg.addColorStop(0,'#0a0a20'); bg.addColorStop(1,'#151530');
-            ctx.fillStyle = bg; ctx.fillRect(0,0,W,H);
-            ctx.font = 'bold 22px "Courier New"'; ctx.textAlign='center'; ctx.fillStyle='#ffaa00'; ctx.fillText('SHOP',W/2,35);
-            ctx.font='12px'; ctx.fillStyle='#aaa'; ctx.fillText(`Coins: ${playerCoins} | Slots: ${abilitySlots} | Equipped: ${equippedAbilities.length}/${abilitySlots}`,W/2,55);
-            let y = 75;
-            for (let key in ABILITY_DEFS) {
-                const a = ABILITY_DEFS[key]; const lvl = getAbilityLevel(key); const owned = lvl > 0;
-                const equipped = equippedAbilities.includes(key);
-                const nextLevel = lvl+1; const canUpgrade = nextLevel <= a.maxLevel;
-                const upgradeCost = canUpgrade ? getAbilityUpgradeCost(key) : 0;
-                const canEquip = owned && !equipped && equippedAbilities.length < abilitySlots;
-                const canUnequip = equipped;
-                ctx.font='11px'; ctx.fillStyle = owned ? (equipped ? '#0f0' : '#888') : '#ffaa00';
-                ctx.fillText(`${a.name} Lv${lvl} - ${a.desc}`, W/2, y+10);
-                if (owned) {
-                    ctx.fillStyle = '#aaa'; ctx.font='9px';
-                    ctx.fillText(`CD:${getAbilityCooldown(key)}s Dur:${getAbilityDuration(key)}s`, W/2, y+22);
-                }
-                if (!owned) drawButton(W/2-40,y+15,80,22,'#00cc44',`BUY ${a.baseCost}`);
-                else if (canUpgrade) drawButton(W/2-40,y+15,80,22,'#00cc44',`UPGRADE ${upgradeCost}`);
-                if (canEquip) drawButton(W/2+40,y+15,80,22,'#00aaff','EQUIP');
-                else if (canUnequip) drawButton(W/2+40,y+15,80,22,'#ff4444','UNEQUIP');
-                y += 40;
-            }
-            drawButton(20,H-45,80,30,'#444','BACK');
-        }
-        function drawLeaderboard() {
-            ctx.clearRect(0,0,W,H); const bg = ctx.createLinearGradient(0,0,0,H); bg.addColorStop(0,'#0a0a20'); bg.addColorStop(1,'#151530');
-            ctx.fillStyle = bg; ctx.fillRect(0,0,W,H);
-            ctx.font='bold 20px "Courier New"'; ctx.textAlign='center'; ctx.fillStyle='#0ff'; ctx.shadowColor='#0ff'; ctx.shadowBlur=10;
-            drawButton(W/2-100,50,100,25,'#555','LOCAL');
-            drawButton(W/2,50,100,25,'#555','GLOBAL');
-            ctx.fillStyle='#fff'; ctx.font='bold 14px "Courier New"';
-            let activeTab = window.leaderboardTab || 'local';
-            if (activeTab === 'local') {
-                ctx.fillText('TOP 10 (LOCAL)', W/2, 35);
-                ctx.font='12px'; let y=80;
-                for (let i=0;i<10;i++) { ctx.fillStyle=i===0?'#ffd700':'#aaa'; ctx.fillText(`${i+1}. ${leaderboard[i]||'-'}`,W/2,y); y+=22; }
-            } else {
-                ctx.fillText('GLOBAL SHARED SCORES', W/2, 35);
-                ctx.font='12px'; let y=80;
-                const list = sharedScores.slice(0,10);
-                for (let i=0;i<list.length;i++) { ctx.fillStyle=i===0?'#ffd700':'#aaa'; ctx.fillText(`${i+1}. ${list[i]}`,W/2,y); y+=22; }
-                if (list.length===0) ctx.fillText('No shared scores yet', W/2, 100);
-            }
-            drawButton(20,H-45,80,30,'#444','BACK');
-        }
-
-        function drawPlayerShape() {
-            const av = getAvatar();
-            ctx.fillStyle = av.color; ctx.shadowColor = av.glow; ctx.shadowBlur = 12;
-            const cx = player.x + player.width/2, cy = player.y + player.height/2, w = player.width, h = player.height;
-            ctx.beginPath();
-            switch(av.shape) {
-                case 'square': ctx.rect(player.x, player.y, w, h); break;
-                case 'diamond': ctx.moveTo(cx, player.y); ctx.lineTo(player.x+w, cy); ctx.lineTo(cx, player.y+h); ctx.lineTo(player.x, cy); break;
-                case 'circle': ctx.arc(cx, cy, w/2, 0, Math.PI*2); break;
-                case 'star5': const spikes=5, outer=w/2, inner=w/4; let rot=Math.PI/2*3, step=Math.PI/spikes; for(let i=0;i<spikes;i++){ ctx.lineTo(cx+Math.cos(rot)*outer,cy+Math.sin(rot)*outer); rot+=step; ctx.lineTo(cx+Math.cos(rot)*inner,cy+Math.sin(rot)*inner); rot+=step; } break;
-                case 'hexagon': const sides=6, r=w/2; for(let i=0;i<sides;i++){ let ang=Math.PI/2+i*2*Math.PI/sides; i===0?ctx.moveTo(cx+r*Math.cos(ang),cy+r*Math.sin(ang)):ctx.lineTo(cx+r*Math.cos(ang),cy+r*Math.sin(ang)); } break;
-                case 'star8': const p8=8, or8=w/2, ir8=w/3.5; for(let i=0;i<p8*2;i++){ let ang=Math.PI/2-i*Math.PI/p8; let rad=i%2===0?or8:ir8; let x=cx+Math.cos(ang)*rad,y=cy-Math.sin(ang)*rad; i===0?ctx.moveTo(x,y):ctx.lineTo(x,y); } break;
-                case 'decagon': const ds=10, dr=w/2; for(let i=0;i<ds;i++){ let ang=Math.PI/2+i*2*Math.PI/ds; let x=cx+dr*Math.cos(ang),y=cy+dr*Math.sin(ang); i===0?ctx.moveTo(x,y):ctx.lineTo(x,y); } break;
-            }
-            ctx.closePath(); ctx.fill(); ctx.shadowBlur=0; ctx.shadowColor='transparent';
-            if (checkpointActive) { ctx.strokeStyle='#fff'; ctx.lineWidth=3; ctx.shadowColor='#fff'; ctx.shadowBlur=12; ctx.beginPath(); ctx.arc(cx,cy,w/2+6,0,Math.PI*2); ctx.stroke(); }
-        }
-
-        function drawGameOverlay() {
-            ctx.clearRect(0,0,W,H);
-            const grad = ctx.createLinearGradient(0,0,0,H); grad.addColorStop(0,currentTheme.bg[0]); grad.addColorStop(1,currentTheme.bg[1]);
-            ctx.fillStyle = grad; ctx.fillRect(0,0,W,H);
-            ctx.fillStyle = currentTheme.stars; ctx.shadowColor = currentTheme.stars; ctx.shadowBlur = 3;
-            for (let s of stars) { ctx.beginPath(); ctx.arc(s.x,s.y,s.radius,0,Math.PI*2); ctx.fill(); } ctx.shadowBlur = 0;
-            ctx.strokeStyle = 'rgba(255,255,255,0.2)'; ctx.lineWidth = 1.5;
-            for (let l of speedLines) { ctx.globalAlpha = l.life*0.7; ctx.beginPath(); ctx.moveTo(l.x,l.y); ctx.lineTo(l.x+l.length,l.y); ctx.stroke(); } ctx.globalAlpha = 1;
-            ctx.beginPath(); ctx.strokeStyle = currentTheme.ground; ctx.lineWidth = 2; ctx.shadowColor = currentTheme.ground; ctx.shadowBlur = 8;
-            const dash = 30, gap = 15, total = dash+gap, off = (performance.now() * speed * 0.03) % total;
-            for (let x = -off; x < W+total; x += total) { ctx.moveTo(x,GROUND_Y); ctx.lineTo(x+dash,GROUND_Y); } ctx.stroke(); ctx.shadowBlur=0;
-            const obsArray = gameState===STATE.BOSS ? bossObstacles : obstacles;
-            for (let o of obsArray) {
-                ctx.fillStyle = gameState===STATE.BOSS ? '#ff8800' : currentTheme.obs; ctx.shadowColor = ctx.fillStyle; ctx.shadowBlur = 10;
-                if (o.type==='orb'||o.type==='homing') { ctx.beginPath(); ctx.arc(o.x+o.width/2,o.y+o.height/2,o.width/2,0,Math.PI*2); ctx.fill(); }
-                else ctx.fillRect(o.x, o.y, o.width, o.height);
-            }
-            if (gameState!==STATE.BOSS) {
-                for (let c of coins) {
-                    let bob = Math.sin(performance.now()/200 + c.bobPhase) * 2;
-                    ctx.fillStyle = '#ffd700'; ctx.shadowColor = '#ffd700'; ctx.shadowBlur = 8;
-                    ctx.beginPath(); ctx.arc(c.x+c.width/2, c.y+c.height/2 + bob, c.width/2, 0, Math.PI*2); ctx.fill();
-                }
-            }
-            if (gameState===STATE.BOSS) {
-                const bx = bossEntity.x+(Math.random()-0.5)*bossEntity.vibrate, by = bossEntity.y+(Math.random()-0.5)*bossEntity.vibrate;
-                ctx.fillStyle = '#ff3333'; ctx.shadowColor = '#ff3333'; ctx.shadowBlur = 20; ctx.fillRect(bx,by,bossEntity.width,bossEntity.height);
-            }
-            ctx.shadowBlur = 0; drawPlayerShape();
-            if (!player.grounded && (player.doubleJumpAvailable||extraJumpsActive)) {
-                ctx.fillStyle = '#fff'; ctx.shadowColor = '#fff'; ctx.shadowBlur = 8; ctx.beginPath(); ctx.arc(player.x+player.width/2, player.y-8,3,0,Math.PI*2); ctx.fill();
-            }
-            ctx.shadowBlur = 0;
-            for (let p of particles) { ctx.globalAlpha = p.life; ctx.fillStyle = p.color; ctx.shadowColor = p.color; ctx.shadowBlur = 6; ctx.fillRect(p.x,p.y,p.size,p.size); } ctx.globalAlpha = 1;
-
-            if (gameState === STATE.PLAYING && !paused) {
-                ctx.fillStyle = 'rgba(0,0,0,0.5)';
-                ctx.fillRect(W-45, 10, 35, 35);
-                ctx.fillStyle = '#fff'; ctx.font = '24px "Courier New"'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-                ctx.fillText('⏸', W-27, 27);
-            }
-        }
-        function drawPauseOverlay() {
-            ctx.fillStyle = 'rgba(0,0,0,0.75)'; ctx.fillRect(0,0,W,H);
-            ctx.font = 'bold 28px "Courier New"'; ctx.textAlign = 'center'; ctx.fillStyle = '#fff';
-            ctx.fillText('PAUSED', W/2, H/2-30);
-            drawButton(W/2-60, H/2, 120, 45, '#00cc44', 'RESUME');
-        }
-        function drawHUD() {
-            ctx.font = 'bold 18px "Courier New"'; ctx.textAlign='center'; ctx.fillStyle='#fff';
-            ctx.fillText(`${score}`, W/2, 45); ctx.font='12px'; ctx.fillText(`LVL ${level}`, W/2, 65);
-            if (gameState===STATE.BOSS) ctx.fillText(`BOSS: ${bossDodged}/${BOSS_REQUIRED_DODGES}  LIVES: ${bossLives}`, W/2, 105);
-            else if (gameState===STATE.PLAYING && level>=6) ctx.fillText('CHAOS MODE', W/2, 85);
-            let cdY = 85;
-            for (let key of equippedAbilities) {
-                if (abilityCooldowns[key] && abilityCooldowns[key] > 0) {
-                    ctx.fillStyle='#ff8888'; ctx.font='10px'; ctx.fillText(`${ABILITY_DEFS[key].name}: ${Math.ceil(abilityCooldowns[key])}s`, W/2, cdY); cdY += 15;
-                }
-            }
-            if (checkpointActive) {
-                ctx.fillStyle='#ffffff'; ctx.font='bold 12px'; ctx.fillText(`CHECKPOINT: ${Math.ceil(checkpointTimer)}s`, W/2, cdY);
-            }
-            if (levelUpText) {
-                ctx.font = 'bold 20px "Courier New"'; ctx.fillStyle = '#ffd700'; ctx.shadowColor = '#ffd700'; ctx.shadowBlur = 10;
-                ctx.fillText(levelUpText, W/2, H/2-60); ctx.shadowBlur = 0;
-            }
-        }
-
-        function draw() {
-            const sx = shakeAmount ? (Math.random()-0.5)*shakeAmount : 0;
-            const sy = shakeAmount ? (Math.random()-0.5)*shakeAmount : 0;
-            ctx.save(); ctx.translate(sx,sy);
-            if (gameState===STATE.MENU) drawMenu();
-            else if (gameState===STATE.SHOP) drawShop();
-            else if (gameState===STATE.LEADERBOARD) drawLeaderboard();
-            else if (gameState===STATE.PLAYING || gameState===STATE.BOSS) {
-                drawGameOverlay(); drawHUD();
-                if (gameState===STATE.PLAYING && paused) drawPauseOverlay();
-            } else if (gameState===STATE.GAMEOVER) {
-                drawGameOverlay(); drawHUD();
-                ctx.fillStyle='rgba(0,0,0,0.7)'; ctx.fillRect(0,0,W,H);
-                ctx.font='bold 22px'; ctx.textAlign='center'; ctx.fillStyle='#fff';
-                ctx.fillText('GAME OVER', W/2, H/2-40); ctx.font='14px';
-                ctx.fillText(`Score: ${score}  Coins: ${runCoins}`, W/2, H/2-10);
-                ctx.fillText(`Total coins: ${playerCoins}`, W/2, H/2+20);
-                ctx.fillText('TAP TO CONTINUE', W/2, H/2+55);
-            }
-            ctx.restore();
-            jumpBtn.style.display = (gameState===STATE.PLAYING && !paused) || gameState===STATE.BOSS ? 'flex' : 'none';
-            abilityBtn.style.display = (gameState===STATE.PLAYING && !paused) || gameState===STATE.BOSS ? 'flex' : 'none';
-            shareBtn.style.display = (gameState===STATE.GAMEOVER) ? 'block' : 'none';
-            muteBtn.textContent = muted ? '🔇' : '🔊';
-        }
-
-        function getCanvasCoords(e) { const r = canvas.getBoundingClientRect(); return { x: (e.clientX - r.left) * W / r.width, y: (e.clientY - r.top) * H / r.height }; }
-
-        function performJump() {
-            if ((gameState !== STATE.PLAYING && gameState !== STATE.BOSS) || paused) return;
-            if (player.grounded) { player.vy = JUMP_VEL; player.grounded = false; player.doubleJumpAvailable = true; sfxJump(); }
-            else if (player.doubleJumpAvailable) { player.vy = DOUBLE_JUMP_VEL; player.doubleJumpAvailable = false; sfxJump(); }
-            else if (extraJumpsActive) { player.vy = DOUBLE_JUMP_VEL; sfxJump(); }
-        }
-
-        canvas.addEventListener('mousedown', e => { const c = getCanvasCoords(e); handleCanvasClick(c.x, c.y); });
-        canvas.addEventListener('touchstart', e => { e.preventDefault(); const t = e.touches[0]; const c = getCanvasCoords(t); handleCanvasClick(c.x, c.y); }, { passive: false });
-
-        jumpBtn.addEventListener('mousedown', e => { e.stopPropagation(); performJump(); });
-        jumpBtn.addEventListener('touchstart', e => { e.stopPropagation(); performJump(); });
-
-        abilityBtn.addEventListener('mousedown', e => { e.stopPropagation(); activateEquippedAbility(); });
-        abilityBtn.addEventListener('touchstart', e => { e.stopPropagation(); activateEquippedAbility(); });
-
-        muteBtn.addEventListener('click', () => { muted = !muted; saveData(); if (muted) stopMusic(); else if (gameState===STATE.PLAYING||gameState===STATE.BOSS) startMusic(); });
-
-        shareBtn.addEventListener('click', () => {
-            if (gameState === STATE.GAMEOVER && score > 0) {
-                const url = new URL(window.location.href);
-                url.searchParams.set('score', score);
-                const urlStr = url.toString();
-                if (navigator.share) {
-                    navigator.share({ title: 'Neon Gauntlet Score', text: `I scored ${score} in Neon Gauntlet!`, url: urlStr });
-                } else {
-                    navigator.clipboard.writeText(urlStr).then(() => alert('Score link copied! Share it with friends.'));
-                }
-            }
-        });
-
-        document.addEventListener('keydown', e => {
-            if (e.code === 'Space' || e.key === ' ') {
-                e.preventDefault();
-                if (gameState === STATE.GAMEOVER) { gameState = STATE.MENU; stopMusic(); }
-                else performJump();
-            }
-            if (e.code === 'KeyE' && !paused) { e.preventDefault(); activateEquippedAbility(); }
-            if ((e.code === 'KeyP' || e.code === 'Escape') && gameState === STATE.PLAYING) {
-                e.preventDefault();
-                paused = !paused;
-                if (paused) stopMusic(); else startMusic();
-            }
-        });
-
-        function activateEquippedAbility() {
-            if (equippedAbilities.length === 0) return;
-            for (let key of equippedAbilities) {
-                if (!abilityCooldowns[key] || abilityCooldowns[key] <= 0) {
-                    activateAbility(key); return;
-                }
-            }
-        }
-
-        window.leaderboardTab = 'local';
-        function handleCanvasClick(mx, my) {
-            if (gameState === STATE.PLAYING && !paused && mx >= W-45 && mx <= W-10 && my >= 10 && my <= 45) {
-                paused = true; stopMusic(); return;
-            }
-            if (gameState === STATE.PLAYING && paused) {
-                if (mx >= W/2-60 && mx <= W/2+60 && my >= H/2 && my <= H/2+45) { paused = false; startMusic(); return; }
-                paused = false; startMusic(); return;
-            }
-            if (gameState === STATE.GAMEOVER) { gameState = STATE.MENU; stopMusic(); return; }
-
-            const buttons = getCurrentButtons();
-            for (let b of buttons) {
-                if (mx >= b.x && mx <= b.x+b.w && my >= b.y && my <= b.y+b.h) {
-                    handleButton(b.id); return;
-                }
-            }
-            if (gameState === STATE.PLAYING || gameState === STATE.BOSS) performJump();
-        }
-
-        function getCurrentButtons() {
-            if (gameState === STATE.MENU) {
-                const bossLabel = bossDefeated ? 'BOSS (DEFEATED)' : (bossAttemptRemaining ? 'BOSS (FREE RETRY)' : `BOSS (${BOSS_ENTRY_FEE} coins)`);
-                return [
-                    { id:'play', x:W/2-70, y:130, w:140, h:32 },
-                    { id:'shop', x:W/2-70, y:170, w:140, h:32 },
-                    { id:'leaderboard', x:W/2-70, y:210, w:140, h:32 },
-                    { id:'boss', x:W/2-70, y:250, w:140, h:32 }
-                ];
-            } else if (gameState === STATE.SHOP) {
-                const btns = [];
-                let y = 75;
-                for (let key in ABILITY_DEFS) {
-                    const a = ABILITY_DEFS[key]; const lvl = getAbilityLevel(key); const owned = lvl>0;
-                    const equipped = equippedAbilities.includes(key);
-                    const canUpgrade = owned && (lvl+1 <= a.maxLevel);
-                    if (!owned) btns.push({ id:'buy_'+key, x:W/2-40, y:y+15, w:80, h:22 });
-                    else if (canUpgrade) btns.push({ id:'upgrade_'+key, x:W/2-40, y:y+15, w:80, h:22 });
-                    if (owned && !equipped && equippedAbilities.length < abilitySlots) btns.push({ id:'equip_'+key, x:W/2+40, y:y+15, w:80, h:22 });
-                    else if (equipped) btns.push({ id:'unequip_'+key, x:W/2+40, y:y+15, w:80, h:22 });
-                    y += 40;
-                }
-                btns.push({ id:'back', x:20, y:H-45, w:80, h:30 });
-                return btns;
-            } else if (gameState === STATE.LEADERBOARD) {
-                return [
-                    { id:'tab_local', x:W/2-100, y:50, w:100, h:25 },
-                    { id:'tab_global', x:W/2, y:50, w:100, h:25 },
-                    { id:'back', x:20, y:H-45, w:80, h:30 }
-                ];
-            }
-            return [];
-        }
-
-        function handleButton(id) {
-            if (id === 'play') { resetRun(); gameState = STATE.PLAYING; startMusic(); }
-            else if (id === 'shop') { gameState = STATE.SHOP; stopMusic(); }
-            else if (id === 'leaderboard') { gameState = STATE.LEADERBOARD; stopMusic(); }
-            else if (id === 'boss' && !bossDefeated) startBoss(false);
-            else if (id === 'back') { gameState = STATE.MENU; bossAttemptRemaining = false; saveData(); }
-            else if (id === 'tab_local') { window.leaderboardTab = 'local'; gameState = STATE.LEADERBOARD; }
-            else if (id === 'tab_global') { window.leaderboardTab = 'global'; gameState = STATE.LEADERBOARD; }
-            else if (id.startsWith('buy_')) {
-                const k = id.substring(4);
-                if (!abilitiesData[k]?.level && playerCoins >= ABILITY_DEFS[k].baseCost) {
-                    playerCoins -= ABILITY_DEFS[k].baseCost; abilitiesData[k] = { level:1 }; saveData();
-                }
-            } else if (id.startsWith('upgrade_')) {
-                const k = id.substring(8);
-                const lvl = getAbilityLevel(k);
-                if (lvl < ABILITY_DEFS[k].maxLevel && playerCoins >= getAbilityUpgradeCost(k)) {
-                    playerCoins -= getAbilityUpgradeCost(k); abilitiesData[k].level++; saveData();
-                }
-            } else if (id.startsWith('equip_')) {
-                const k = id.substring(6);
-                if (!equippedAbilities.includes(k) && equippedAbilities.length < abilitySlots) { equippedAbilities.push(k); saveData(); }
-            } else if (id.startsWith('unequip_')) {
-                const k = id.substring(8);
-                equippedAbilities = equippedAbilities.filter(a => a !== k); saveData();
-            }
-        }
-
-        // ---------- INIT ----------
-        loadData(); loadLeaderboard(); loadSharedScores(); checkURLForScore();
-        stars = []; for (let i=0; i<STAR_COUNT; i++) stars.push({ x:Math.random()*W, y:Math.random()*GROUND_Y, speed:0.5+Math.random()*2, radius:0.5+Math.random()*1.8 });
-        document.addEventListener('touchstart', resumeAudio, { once: true });
-        document.addEventListener('mousedown', resumeAudio, { once: true });
-
-        let accumulator = 0, lastTime = 0;
-        function loop(time) {
-            if (!lastTime) lastTime = time;
-            let dt = (time - lastTime) / 1000;
-            if (dt > 0.1) dt = 0.1;
-            accumulator += dt;
-            while (accumulator >= FIXED_DT) {
-                update();
-                accumulator -= FIXED_DT;
-            }
-            draw();
-            lastTime = time;
             requestAnimationFrame(loop);
-        }
-        requestAnimationFrame(loop);
-    })();
-</script>
+        })();
+    </script>
 </body>
 </html>
