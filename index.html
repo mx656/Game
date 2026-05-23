@@ -158,6 +158,8 @@
             const STATE = {
                 MENU: 'menu',
                 PLAYING: 'playing',
+                HARD: 'hard',
+                INSANE: 'insane',
                 SHOP: 'shop',
                 BOSS: 'boss',
                 GAMEOVER: 'gameover',
@@ -254,10 +256,19 @@
             let speed = 5,
                 baseSpeed = 5;
             let level = 1;
-            const SCORE_PER_LEVEL = 15;
             let scoreThisLevel = 0;
-            const SPEED_INC_PER_SCORE = 0.01;
-            const LEVEL_SPEED_BOOST = 1.1;
+            const BASE_SPAWN_DELAY_SEC = 1.166;
+            const COIN_SPAWN_DELAY_SEC = 1.5;
+            let checkpointInterval = 250;
+
+            // difficulty configuration (set when run starts)
+            let diffConfig = {
+                baseSpeed: 5,
+                spawnDelayMult: 1.0,
+                scorePerLevel: 15,
+                speedIncPerScore: 0.01,
+                checkpointInterval: 250
+            };
 
             let player = {
                 x: PLAYER_X,
@@ -276,7 +287,6 @@
             let abilityCooldowns = {};
             let activeEffects = {};
 
-            const CHECKPOINT_INTERVAL = 250;
             let checkpointActive = false;
             let checkpointTimer = 0;
             let checkpointData = null;
@@ -291,8 +301,6 @@
             const COIN_SIZE = 12;
             let spawnTimer = 0,
                 coinSpawnTimer = 0;
-            const BASE_SPAWN_DELAY_SEC = 1.166;
-            const COIN_SPAWN_DELAY_SEC = 1.5;
 
             let bossLives = 0,
                 bossDodged = 0;
@@ -395,6 +403,8 @@
                 if (!musicActive || !audioCtx || muted) return;
                 let bpm = 120;
                 if (gameState === STATE.PLAYING) bpm = 120 + speed * 8;
+                else if (gameState === STATE.HARD) bpm = 130 + speed * 9;
+                else if (gameState === STATE.INSANE) bpm = 140 + speed * 10;
                 else if (gameState === STATE.BOSS) bpm = 140 + bossDodged * 2;
                 const interval = 60000 / bpm;
                 playTone(60, 0.1, 'sine', 0.12);
@@ -568,7 +578,42 @@
                 return true;
             }
 
-            function resetRun() {
+            function startRun(mode) {
+                // set difficulty config
+                switch (mode) {
+                    case 'normal':
+                        diffConfig = {
+                            baseSpeed: 5,
+                            spawnDelayMult: 1.0,
+                            scorePerLevel: 15,
+                            speedIncPerScore: 0.01,
+                            checkpointInterval: 250
+                        };
+                        gameState = STATE.PLAYING;
+                        break;
+                    case 'hard':
+                        diffConfig = {
+                            baseSpeed: 7,
+                            spawnDelayMult: 0.85,
+                            scorePerLevel: 12,
+                            speedIncPerScore: 0.012,
+                            checkpointInterval: 300
+                        };
+                        gameState = STATE.HARD;
+                        break;
+                    case 'insane':
+                        diffConfig = {
+                            baseSpeed: 9,
+                            spawnDelayMult: 0.7,
+                            scorePerLevel: 10,
+                            speedIncPerScore: 0.015,
+                            checkpointInterval: 400
+                        };
+                        gameState = STATE.INSANE;
+                        break;
+                }
+
+                // full reset
                 player.y = GROUND_Y - PLAYER_H;
                 player.vy = 0;
                 player.grounded = true;
@@ -586,8 +631,9 @@
                 runCoins = 0;
                 scoreThisLevel = 0;
                 level = 1;
-                baseSpeed = 5;
-                speed = 5;
+                baseSpeed = diffConfig.baseSpeed;
+                speed = baseSpeed;
+                checkpointInterval = diffConfig.checkpointInterval;
                 currentTheme = themes[0];
                 checkpointActive = false;
                 checkpointTimer = 0;
@@ -597,6 +643,12 @@
                 paused = false;
                 levelUpText = '';
                 levelUpTimer = 0;
+                startMusic();
+            }
+
+            function resetRun() {
+                // legacy fallback for normal
+                startRun('normal');
             }
 
             function getMaxClearableHeight(spd) {
@@ -645,7 +697,7 @@
 
             function advanceLevel() {
                 level++;
-                baseSpeed = Math.min(level * 1.2 + 3.8, 25);
+                baseSpeed = Math.min(diffConfig.baseSpeed + (level - 1) * 1.5, 25);
                 speed = baseSpeed;
                 scoreThisLevel = 0;
                 currentTheme = themes[(level - 1) % themes.length];
@@ -682,7 +734,6 @@
                 sfxDeath();
                 if (checkpointActive && checkpointData) {
                     if (respawnFromCheckpoint()) {
-                        gameState = STATE.PLAYING;
                         startMusic();
                         return;
                     }
@@ -828,7 +879,8 @@
             }
 
             function activateAbility(key) {
-                if (gameState !== STATE.PLAYING && gameState !== STATE.BOSS) return;
+                if (gameState !== STATE.PLAYING && gameState !== STATE.HARD && gameState !== STATE.INSANE && gameState !==
+                    STATE.BOSS) return;
                 if (abilityCooldowns[key] && abilityCooldowns[key] > 0) return;
                 if (!equippedAbilities.includes(key)) return;
                 const lvl = getAbilityLevel(key);
@@ -853,7 +905,8 @@
 
             // ---------- UPDATE ----------
             function update() {
-                if (gameState === STATE.PLAYING && paused) return;
+                if ((gameState === STATE.PLAYING || gameState === STATE.HARD || gameState === STATE.INSANE) && paused)
+                    return;
 
                 for (let key in abilityCooldowns)
                     if (abilityCooldowns[key] > 0) abilityCooldowns[key] -= FIXED_DT;
@@ -880,8 +933,9 @@
                 flashAlpha = Math.max(0, flashAlpha - 0.04);
                 shakeAmount = Math.max(0, shakeAmount - 0.6);
 
-                if (gameState === STATE.PLAYING || gameState === STATE.BOSS) {
-                    const isBoss = gameState === STATE.BOSS;
+                const isPlaying = gameState === STATE.PLAYING || gameState === STATE.HARD || gameState === STATE.INSANE;
+                const isBoss = gameState === STATE.BOSS;
+                if (isPlaying || isBoss) {
                     const spd = isBoss ? 7.0 : speed;
 
                     player.vy += GRAVITY;
@@ -911,7 +965,7 @@
                     if (speedLines.length > 100) speedLines.splice(0, speedLines.length - 100);
 
                     if (!isBoss) {
-                        const delay = Math.max(0.4, BASE_SPAWN_DELAY_SEC - spd * 0.055);
+                        const delay = Math.max(0.4, BASE_SPAWN_DELAY_SEC * diffConfig.spawnDelayMult - spd * 0.055);
                         spawnTimer += FIXED_DT;
                         if (spawnTimer >= delay) { spawnTimer = 0;
                             spawnObstacle(); }
@@ -950,9 +1004,9 @@
                                 runCoins++;
                                 scoreThisLevel++;
                                 const maxSpeed = baseSpeed + (LEVEL_SPEED_BOOST * (level - 1));
-                                speed = Math.min(maxSpeed, baseSpeed + scoreThisLevel * SPEED_INC_PER_SCORE);
-                                if (scoreThisLevel >= SCORE_PER_LEVEL) advanceLevel();
-                                if (score > 0 && score % CHECKPOINT_INTERVAL === 0 && !checkpointActive)
+                                speed = Math.min(maxSpeed, baseSpeed + scoreThisLevel * diffConfig.speedIncPerScore);
+                                if (scoreThisLevel >= diffConfig.scorePerLevel) advanceLevel();
+                                if (score > 0 && score % checkpointInterval === 0 && !checkpointActive)
                                     setCheckpoint();
                             }
                             if (checkCollision(player.x, player.y, player.width, player.height, o.x, o.y, o.width, o
@@ -1047,19 +1101,22 @@
                 ctx.fillStyle = '#0ff';
                 ctx.shadowColor = '#0ff';
                 ctx.shadowBlur = 12;
-                ctx.fillText('NEON GAUNTLET', W / 2, 55);
+                ctx.fillText('NEON GAUNTLET', W / 2, 45);
                 ctx.shadowBlur = 0;
                 const av = getAvatar();
                 ctx.font = '13px';
                 ctx.fillStyle = '#aaa';
-                ctx.fillText(`Coins: ${playerCoins}  |  Best: ${highScore}`, W / 2, 85);
-                ctx.fillText(`Avatar: ${av.name} (${av.shape})`, W / 2, 105);
-                drawButton(W / 2 - 70, 130, 140, 32, '#00cc44', 'PLAY');
-                drawButton(W / 2 - 70, 170, 140, 32, '#ffaa00', 'SHOP');
-                drawButton(W / 2 - 70, 210, 140, 32, '#00aaff', 'LEADERBOARD');
+                ctx.fillText(`Coins: ${playerCoins}  |  Best: ${highScore}`, W / 2, 70);
+                ctx.fillText(`Avatar: ${av.name} (${av.shape})`, W / 2, 88);
+
+                drawButton(W / 2 - 70, 110, 140, 30, '#00cc44', 'NORMAL');
+                drawButton(W / 2 - 70, 145, 140, 30, '#ff8800', 'HARD');
+                drawButton(W / 2 - 70, 180, 140, 30, '#ff2222', 'INSANE');
+                drawButton(W / 2 - 70, 215, 140, 30, '#ffaa00', 'SHOP');
+                drawButton(W / 2 - 70, 250, 140, 30, '#00aaff', 'LEADERBOARD');
                 let bossLabel = bossDefeated ? 'BOSS (DEFEATED)' : (bossAttemptRemaining ? 'BOSS (FREE RETRY)' :
                     `BOSS (${BOSS_ENTRY_FEE} coins)`);
-                drawButton(W / 2 - 70, 250, 140, 32, bossDefeated ? '#666' : '#ff4444', bossLabel);
+                drawButton(W / 2 - 70, 285, 140, 30, bossDefeated ? '#666' : '#ff4444', bossLabel);
             }
 
             function drawShop() {
@@ -1321,7 +1378,7 @@
                 }
                 ctx.globalAlpha = 1;
 
-                if (gameState === STATE.PLAYING && !paused) {
+                if ((gameState === STATE.PLAYING || gameState === STATE.HARD || gameState === STATE.INSANE) && !paused) {
                     ctx.fillStyle = 'rgba(0,0,0,0.5)';
                     ctx.fillRect(W - 45, 10, 35, 35);
                     ctx.fillStyle = '#fff';
@@ -1348,10 +1405,14 @@
                 ctx.fillStyle = '#fff';
                 ctx.fillText(`${score}`, W / 2, 45);
                 ctx.font = '12px';
-                ctx.fillText(`LVL ${level}`, W / 2, 65);
+                let modeLabel = '';
+                if (gameState === STATE.HARD) modeLabel = 'HARD';
+                else if (gameState === STATE.INSANE) modeLabel = 'INSANE';
+                ctx.fillText(`LVL ${level} ${modeLabel}`, W / 2, 65);
                 if (gameState === STATE.BOSS) ctx.fillText(`BOSS: ${bossDodged}/${BOSS_REQUIRED_DODGES}  LIVES: ${bossLives}`,
                     W / 2, 105);
-                else if (gameState === STATE.PLAYING && level >= 6) ctx.fillText('CHAOS MODE', W / 2, 85);
+                else if ((gameState === STATE.PLAYING || gameState === STATE.HARD || gameState === STATE.INSANE) && level >=
+                    6) ctx.fillText('CHAOS MODE', W / 2, 85);
                 let cdY = 85;
                 for (let key of equippedAbilities) {
                     if (abilityCooldowns[key] && abilityCooldowns[key] > 0) {
@@ -1384,10 +1445,12 @@
                 if (gameState === STATE.MENU) drawMenu();
                 else if (gameState === STATE.SHOP) drawShop();
                 else if (gameState === STATE.LEADERBOARD) drawLeaderboard();
-                else if (gameState === STATE.PLAYING || gameState === STATE.BOSS) {
+                else if (gameState === STATE.PLAYING || gameState === STATE.HARD || gameState === STATE.INSANE || gameState ===
+                    STATE.BOSS) {
                     drawGameOverlay();
                     drawHUD();
-                    if (gameState === STATE.PLAYING && paused) drawPauseOverlay();
+                    if ((gameState === STATE.PLAYING || gameState === STATE.HARD || gameState === STATE.INSANE) && paused)
+                        drawPauseOverlay();
                 } else if (gameState === STATE.GAMEOVER) {
                     drawGameOverlay();
                     drawHUD();
@@ -1403,10 +1466,10 @@
                     ctx.fillText('TAP TO CONTINUE', W / 2, H / 2 + 55);
                 }
                 ctx.restore();
-                jumpBtn.style.display = (gameState === STATE.PLAYING && !paused) || gameState === STATE.BOSS ? 'flex' :
-                    'none';
-                abilityBtn.style.display = (gameState === STATE.PLAYING && !paused) || gameState === STATE.BOSS ? 'flex' :
-                    'none';
+                jumpBtn.style.display = ((gameState === STATE.PLAYING || gameState === STATE.HARD || gameState === STATE
+                    .INSANE) && !paused) || gameState === STATE.BOSS ? 'flex' : 'none';
+                abilityBtn.style.display = ((gameState === STATE.PLAYING || gameState === STATE.HARD || gameState === STATE
+                    .INSANE) && !paused) || gameState === STATE.BOSS ? 'flex' : 'none';
                 shareBtn.style.display = (gameState === STATE.GAMEOVER) ? 'block' : 'none';
                 muteBtn.textContent = muted ? '🔇' : '🔊';
             }
@@ -1420,7 +1483,8 @@
             }
 
             function performJump() {
-                if ((gameState !== STATE.PLAYING && gameState !== STATE.BOSS) || paused) return;
+                if ((gameState !== STATE.PLAYING && gameState !== STATE.HARD && gameState !== STATE.INSANE && gameState !==
+                        STATE.BOSS) || paused) return;
                 if (player.grounded) {
                     player.vy = JUMP_VEL;
                     player.grounded = false;
@@ -1461,7 +1525,8 @@
                 muted = !muted;
                 saveData();
                 if (muted) stopMusic();
-                else if (gameState === STATE.PLAYING || gameState === STATE.BOSS) startMusic();
+                else if (gameState === STATE.PLAYING || gameState === STATE.HARD || gameState === STATE.INSANE || gameState ===
+                    STATE.BOSS) startMusic();
             });
 
             shareBtn.addEventListener('click', () => {
@@ -1490,7 +1555,8 @@
                 }
                 if (e.code === 'KeyE' && !paused) { e.preventDefault();
                     activateEquippedAbility(); }
-                if ((e.code === 'KeyP' || e.code === 'Escape') && gameState === STATE.PLAYING) {
+                if ((e.code === 'KeyP' || e.code === 'Escape') && (gameState === STATE.PLAYING || gameState === STATE
+                        .HARD || gameState === STATE.INSANE)) {
                     e.preventDefault();
                     paused = !paused;
                     if (paused) stopMusic();
@@ -1511,12 +1577,13 @@
             window.leaderboardTab = 'local';
 
             function handleCanvasClick(mx, my) {
-                if (gameState === STATE.PLAYING && !paused && mx >= W - 45 && mx <= W - 10 && my >= 10 && my <= 45) {
+                const isPlayMode = gameState === STATE.PLAYING || gameState === STATE.HARD || gameState === STATE.INSANE;
+                if (isPlayMode && !paused && mx >= W - 45 && mx <= W - 10 && my >= 10 && my <= 45) {
                     paused = true;
                     stopMusic();
                     return;
                 }
-                if (gameState === STATE.PLAYING && paused) {
+                if (isPlayMode && paused) {
                     if (mx >= W / 2 - 60 && mx <= W / 2 + 60 && my >= H / 2 && my <= H / 2 + 45) {
                         paused = false;
                         startMusic();
@@ -1536,16 +1603,18 @@
                         return;
                     }
                 }
-                if (gameState === STATE.PLAYING || gameState === STATE.BOSS) performJump();
+                if (isPlayMode || gameState === STATE.BOSS) performJump();
             }
 
             function getCurrentButtons() {
                 if (gameState === STATE.MENU) {
                     return [
-                        { id: 'play', x: W / 2 - 70, y: 130, w: 140, h: 32 },
-                        { id: 'shop', x: W / 2 - 70, y: 170, w: 140, h: 32 },
-                        { id: 'leaderboard', x: W / 2 - 70, y: 210, w: 140, h: 32 },
-                        { id: 'boss', x: W / 2 - 70, y: 250, w: 140, h: 32 }
+                        { id: 'normal', x: W / 2 - 70, y: 110, w: 140, h: 30 },
+                        { id: 'hard', x: W / 2 - 70, y: 145, w: 140, h: 30 },
+                        { id: 'insane', x: W / 2 - 70, y: 180, w: 140, h: 30 },
+                        { id: 'shop', x: W / 2 - 70, y: 215, w: 140, h: 30 },
+                        { id: 'leaderboard', x: W / 2 - 70, y: 250, w: 140, h: 30 },
+                        { id: 'boss', x: W / 2 - 70, y: 285, w: 140, h: 30 }
                     ];
                 } else if (gameState === STATE.SHOP) {
                     const btns = [];
@@ -1576,9 +1645,10 @@
             }
 
             function handleButton(id) {
-                if (id === 'play') { resetRun();
-                    gameState = STATE.PLAYING;
-                    startMusic(); } else if (id === 'shop') { gameState = STATE.SHOP;
+                if (id === 'normal') startRun('normal');
+                else if (id === 'hard') startRun('hard');
+                else if (id === 'insane') startRun('insane');
+                else if (id === 'shop') { gameState = STATE.SHOP;
                     stopMusic(); } else if (id === 'leaderboard') { gameState = STATE.LEADERBOARD;
                     stopMusic(); } else if (id === 'boss' && !bossDefeated) startBoss(false);
                 else if (id === 'back') { gameState = STATE.MENU;
