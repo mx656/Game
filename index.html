@@ -39,16 +39,15 @@
             transition: background 0.15s, transform 0.1s;
         }
         .game-btn:active { transform: scale(0.92); background: rgba(255,255,255,0.15); }
+
+        /* All overlaid buttons are transparent to touch so canvas handles everything */
+        #jumpBtn, #abilityBtn, #slideBtn, #muteBtn, #shareBtn { pointer-events: none; }
+
         #jumpBtn { bottom:10%; left:5%; width:15%; height:15%; min-width:50px; min-height:50px; font-size:2.5vmin; border-color:#0ff; color:#0ff; background:rgba(0,255,255,0.15); }
         #abilityBtn { bottom:10%; right:5%; width:15%; height:15%; min-width:50px; min-height:50px; font-size:2.5vmin; border-color:#fc0; color:#fc0; background:rgba(255,200,0,0.15); }
         #slideBtn { bottom:10%; left:22%; width:12%; height:12%; min-width:40px; min-height:40px; font-size:2vmin; border-color:#f0f; color:#f0f; background:rgba(255,0,255,0.15); display:none; }
         #muteBtn { top:5%; left:5%; width:10%; height:10%; min-width:36px; min-height:36px; font-size:2vmin; border-color:#888; color:#888; background:rgba(0,0,0,0.6); }
-        #shareBtn {
-            position:absolute; top:5%; right:5%; padding:1.5% 3%; border-radius:6px;
-            background:#0c4; color:#fff; border:none; font-size:2vmin; cursor:pointer;
-            font-family:'Courier New', monospace; display:none; transition:background 0.2s;
-        }
-        #shareBtn:hover { background:#0e5; }
+        #shareBtn { position:absolute; top:5%; right:5%; padding:1.5% 3%; border-radius:6px; background:#0c4; color:#fff; border:none; font-size:2vmin; cursor:pointer; font-family:'Courier New', monospace; display:none; transition:background 0.2s; }
         .info { position:absolute; bottom:5px; color:#555; font-size:10px; text-align:center; width:100%; pointer-events:none; }
         .scroll-indicator { position:absolute; left:50%; transform:translateX(-50%); pointer-events:none; color:#0ff; font-size:16px; opacity:0.7; animation:pulse 1.2s ease-in-out infinite; z-index:5; }
         @keyframes pulse { 0%,100% { opacity:0.4; } 50% { opacity:1; } }
@@ -96,6 +95,7 @@
             const COIN_SIZE = 12;
             const STAR_COUNT = 80;
             const MAX_PARTICLES = 250;
+            const MAX_WEATHER = 200;
             const COMBO_TIMEOUT = 1.5;
             const SLIDE_DURATION = 0.4;
             const SLIDE_HEIGHT = 12;
@@ -170,6 +170,7 @@
             let speed = 5, baseSpeed = 5;
             let level = 1, scoreThisLevel = 0;
             let nextCheckpointScore = 100;
+            let checkpointInterval = 250;
             let gravityDir = 1;
             let groundSurfaceY = GROUND_Y;
             let comboCount = 0, comboTimer = 0;
@@ -325,8 +326,19 @@
             function increaseCombo() { comboCount++; comboTimer=COMBO_TIMEOUT; }
             function resetCombo() { if(comboCount>0) { sfxComboBreak(); comboCount=0; comboTimer=0; } }
 
-            // Scroll
-            function setScrollableScreen(maxY) { isScrollableScreen=true; maxScrollY=Math.max(0,maxY); scrollY=0; targetScrollY=0; updateScrollIndicators(); }
+            // Scroll – fixed reset bug
+            function setScrollableScreen(maxY) {
+                maxScrollY = Math.max(0, maxY);
+                if (!isScrollableScreen) {
+                    isScrollableScreen = true;
+                    scrollY = 0;
+                    targetScrollY = 0;
+                } else {
+                    scrollY = Math.min(scrollY, maxScrollY);
+                    targetScrollY = Math.min(targetScrollY, maxScrollY);
+                }
+                updateScrollIndicators();
+            }
             function clearScrollableScreen() { isScrollableScreen=false; maxScrollY=0; scrollY=0; targetScrollY=0; updateScrollIndicators(); }
             function updateScrollIndicators() {
                 if(!isScrollableScreen || maxScrollY<=2) { scrollUpEl.style.display='none'; scrollDownEl.style.display='none'; return; }
@@ -339,7 +351,7 @@
                 scrollY = Math.max(0, Math.min(maxScrollY, scrollY)); updateScrollIndicators();
             }
 
-            // ---------- CHECKPOINT (every 100 points, 60 sec) ----------
+            // ---------- CHECKPOINT (uses diffConfig.checkpointInterval) ----------
             function setCheckpoint() {
                 checkpointData = {
                     score, speed, baseSpeed, level, scoreThisLevel, gravityDir,
@@ -350,10 +362,9 @@
                     platforms: platforms.map(p => ({ ...p })),
                     weatherType,
                     comboCount,
-                    playerX: player.x          // <-- FIX: save player x
+                    playerX: player.x
                 };
-                checkpointActive = true;
-                checkpointTimer = 60; // 60 seconds
+                checkpointActive = true; checkpointTimer = 60;
                 flashAlpha = 0.7; sfxCheckpoint();
                 for(let i=0;i<20;i++) particles.push({ x:W/2, y:groundSurfaceY-30, vx:(Math.random()-0.5)*6, vy:-Math.random()*5, life:1, decay:0.025, size:4+Math.random()*4, color:'#fff' });
             }
@@ -362,19 +373,16 @@
                 if(!checkpointData) return false;
                 score = checkpointData.score; speed = checkpointData.speed; baseSpeed = checkpointData.baseSpeed;
                 level = checkpointData.level; scoreThisLevel = checkpointData.scoreThisLevel;
-                setGravityDir(checkpointData.gravityDir);
-                currentTheme = themes[checkpointData.themeIndex];
+                setGravityDir(checkpointData.gravityDir); currentTheme = themes[checkpointData.themeIndex];
                 extraJumpsActive = checkpointData.extraJumpsActive;
-                abilityCooldowns = { ...checkpointData.abilityCooldowns };
-                activeEffects = { ...checkpointData.activeEffects };
-                platforms = checkpointData.platforms.map(p => ({ ...p }));
-                weatherType = checkpointData.weatherType;
+                abilityCooldowns = { ...checkpointData.abilityCooldowns }; activeEffects = { ...checkpointData.activeEffects };
+                platforms = checkpointData.platforms.map(p => ({ ...p })); weatherType = checkpointData.weatherType;
                 comboCount = checkpointData.comboCount; comboTimer = 0;
-                player.x = checkpointData.playerX !== undefined ? checkpointData.playerX : PLAYER_X; // restore X
+                player.x = checkpointData.playerX !== undefined ? checkpointData.playerX : PLAYER_X;
                 snapPlayerToGround();
                 obstacles=[]; coins=[]; powerUps=[]; spawnTimer=0; coinSpawnTimer=0; particles=[]; speedLines=[];
                 flashAlpha=0.5; shakeAmount=3; isSliding=false; slideTimer=0;
-                nextCheckpointScore = Math.floor(score/100)*100 + 100;
+                nextCheckpointScore = Math.floor(score / checkpointInterval) * checkpointInterval + checkpointInterval;
                 slowMotionActive = ghostActive = freezeActive = false;
                 return true;
             }
@@ -390,12 +398,12 @@
                 obstacles=[]; coins=[]; platforms=[]; powerUps=[]; particles=[]; speedLines=[]; weatherParticles=[];
                 flashAlpha=0; shakeAmount=0; spawnTimer=0; coinSpawnTimer=0; score=0; runCoins=0; scoreThisLevel=0; level=1;
                 baseSpeed = diffConfig.baseSpeed; speed = baseSpeed;
-                nextCheckpointScore = 100;
                 checkpointInterval = diffConfig.checkpointInterval;
+                nextCheckpointScore = checkpointInterval;
                 currentTheme=themes[0]; checkpointActive=false; checkpointTimer=0; checkpointData=null;
                 abilityCooldowns={}; activeEffects={}; paused=false; levelUpText=''; levelUpTimer=0;
                 comboCount=0; comboTimer=0; isSliding=false; slideTimer=0;
-                player.x = PLAYER_X; // reset position
+                player.x = PLAYER_X;
                 weatherType = (mode==='insane')?'rain':'none';
                 slowMotionActive = ghostActive = freezeActive = false;
                 startMusic(); showMessage(`Mode: ${mode.toUpperCase()}`,1.5);
@@ -423,10 +431,9 @@
                 for(let i=0;i<20;i++) particles.push({ x:player.x+player.width/2, y:player.y+player.height/2, vx:(Math.random()-0.5)*8, vy:-Math.random()*6, life:1, decay:0.02, size:3+Math.random()*5, color:currentTheme.obs });
                 flashAlpha=0.6; shakeAmount=8; clearScrollableScreen();
                 slowMotionActive = ghostActive = freezeActive = false;
-                // On full death (game over), dash cooldown and position are reset by startRun() later, so fine.
             }
 
-            // ---------- SPAWNING ----------
+            // Spawning
             function spawnObstacle() {
                 const maxH = Math.floor((JUMP_VEL*JUMP_VEL)/(2*GRAVITY)*Math.max(0.4,1.0-speed*0.035)-4);
                 const h = 24+Math.random()*(maxH-24); const y = gravityDir===1? groundSurfaceY-h : groundSurfaceY;
@@ -437,7 +444,7 @@
             function spawnPlatform() { let y = gravityDir===1? groundSurfaceY-50-Math.random()*60 : groundSurfaceY+50+Math.random()*60; y=Math.max(30,Math.min(H-30,y)); platforms.push({ x:W, y, width:60, height:8, type:'static', counted:false }); }
             function spawnPowerUp() { const types=['speed','invincible','magnet','coin']; const t=types[Math.floor(Math.random()*types.length)]; let y=gravityDir===1? groundSurfaceY-60-Math.random()*50 : groundSurfaceY+60+Math.random()*50; powerUps.push({ x:W, y, width:16, height:16, type:t, collected:false }); }
 
-            // ---------- BOSSES (unchanged) ----------
+            // Bosses (unchanged)
             function winBoss() { abilitySlots=2; bossDefeated=true; playerCoins+=20; bossAttemptRemaining=false; unlockAchievement('boss1'); saveData(); gameState=STATE.MENU; stopMusic(); sfxBossWin(); for(let i=0;i<30;i++) particles.push({ x:W/2, y:H/2, vx:(Math.random()-0.5)*10, vy:-Math.random()*8, life:1, decay:0.015, size:5+Math.random()*6, color:'#fd0' }); clearScrollableScreen(); }
             function restartBossWave() { bossObstacles=[]; bossSpawnTimer=0; bossActiveObstaclesSpawned=0; bossEntity.vibrate=0; snapPlayerToGround(); extraJumpsActive=false; abilityCooldowns={}; activeEffects={}; slowMotionActive=ghostActive=freezeActive=false; }
             function startBoss(keep=false) {
@@ -469,7 +476,7 @@
                 boss2ActiveObstaclesSpawned++; boss2SpawnCooldown = Math.max(10/60, (25-boss2Dodged*0.2)/60);
             }
 
-            // ---------- ABILITY ACTIVATION ----------
+            // Abilities
             function activateAbility(key) {
                 if(gameState!==STATE.PLAYING && gameState!==STATE.HARD && gameState!==STATE.INSANE && gameState!==STATE.BOSS && gameState!==STATE.BOSS2) return;
                 if(abilityCooldowns[key]>0 || !equippedAbilities.includes(key) || getAbilityLevel(key)<=0) return;
@@ -478,7 +485,6 @@
                 activeEffects[key] = dur;
                 flashAlpha = 0.3; sfxAbility();
                 for(let i=0;i<8;i++) particles.push({ x:player.x+player.width/2, y:player.y+player.height/2, vx:(Math.random()-0.5)*4, vy:-Math.random()*3, life:0.6, decay:0.06, size:3+Math.random()*3, color:ABILITY_DEFS[key].color });
-
                 switch(key) {
                     case 'slowTime': slowMotionActive = true; break;
                     case 'dash':
@@ -501,7 +507,6 @@
 
                 for(let k in abilityCooldowns) if(abilityCooldowns[k]>0) abilityCooldowns[k]-=FIXED_DT;
                 for(let k in activeEffects) if(activeEffects[k]>0) activeEffects[k]-=FIXED_DT; else delete activeEffects[k];
-
                 slowMotionActive = activeEffects['slowTime'] > 0;
                 ghostActive = activeEffects['ghostForm'] > 0;
                 freezeActive = activeEffects['timeFreeze'] > 0;
@@ -512,7 +517,10 @@
                 clampScroll();
 
                 for(let s of stars) { s.x-=s.speed*FIXED_DT*60; if(s.x<-5){ s.x=W+5; s.y=Math.random()*H; } }
-                if(weatherType==='rain' && Math.random()<0.5) weatherParticles.push({ x:Math.random()*W, y:-5, speed:8+Math.random()*4, life:1 });
+                if(weatherType==='rain' && Math.random()<0.5) {
+                    weatherParticles.push({ x:Math.random()*W, y:-5, speed:8+Math.random()*4, life:1 });
+                    if(weatherParticles.length > MAX_WEATHER) weatherParticles.splice(0, weatherParticles.length - MAX_WEATHER);
+                }
                 for(let i=weatherParticles.length-1;i>=0;i--) { let wp=weatherParticles[i]; wp.y+=wp.speed*FIXED_DT*60; wp.life-=0.01; if(wp.y>H+10||wp.life<=0) weatherParticles.splice(i,1); }
                 for(let i=particles.length-1;i>=0;i--) { let p=particles[i]; p.x+=p.vx; p.y+=p.vy; p.life-=p.decay; if(p.life<=0) particles.splice(i,1); }
                 if(particles.length>MAX_PARTICLES) particles.splice(0,particles.length-MAX_PARTICLES);
@@ -565,10 +573,7 @@
                                 score += pts; runCoins++; scoreThisLevel++; totalCoinsCollected++; increaseCombo();
                                 if(comboCount>0 && comboCount%10===0) { score+=comboCount; runCoins+=Math.floor(comboCount/5); }
                                 if(scoreThisLevel >= diffConfig.scorePerLevel) advanceLevel();
-                                if(score >= nextCheckpointScore && !checkpointActive) {
-                                    setCheckpoint();
-                                    nextCheckpointScore += 100;
-                                }
+                                if(score >= nextCheckpointScore && !checkpointActive) { setCheckpoint(); nextCheckpointScore += checkpointInterval; }
                             }
                             if(checkCollision(player, o)) {
                                 if(ghostActive || checkpointActive || (activeEffects['shield'] && activeEffects['shield']>0)) {
@@ -638,7 +643,8 @@
 
             function drawMenu() {
                 ctx.clearRect(0,0,W,H); const bg=ctx.createLinearGradient(0,0,0,H); bg.addColorStop(0,'#0a0a20'); bg.addColorStop(1,'#151530'); ctx.fillStyle=bg; ctx.fillRect(0,0,W,H);
-                const totalContentH = bossDefeated?345:320; setScrollableScreen(totalContentH-H+40);
+                const totalContentH = bossDefeated?345:320;
+                setScrollableScreen(totalContentH - H + 40);
                 drawFixedHeader('NEON GAUNTLET', `Coins: ${playerCoins}  |  Best: ${highScore}`);
                 drawScrollableContainer(()=>{
                     const av = getAvatarObj(); ctx.font='12px'; ctx.fillStyle='#aaa'; ctx.textAlign='center'; ctx.fillText(`Avatar: ${av.name}`,W/2,88);
@@ -655,7 +661,7 @@
             function drawShop() {
                 ctx.clearRect(0,0,W,H); const bg=ctx.createLinearGradient(0,0,0,H); bg.addColorStop(0,'#0a0a20'); bg.addColorStop(1,'#151530'); ctx.fillStyle=bg; ctx.fillRect(0,0,W,H);
                 let contentH=75; for(let key in ABILITY_DEFS) contentH+=40; if(abilitySlots<3) contentH+=40; contentH+=45;
-                setScrollableScreen(contentH-H+40);
+                setScrollableScreen(contentH - H + 40);
                 drawFixedHeader('SHOP', `Coins: ${playerCoins} | Slots: ${abilitySlots} | Equipped: ${equippedAbilities.length}/${abilitySlots}`);
                 drawButton(W-55,5,45,22,'#444','BACK');
                 drawScrollableContainer(()=>{
@@ -782,20 +788,14 @@
                 muteBtn.textContent = muted?'🔇':'🔊';
             }
 
-            // ==================== INPUT (fixed button coordinate conversion) ====================
+            // ==================== INPUT – FIXED RESUME & SHARE ====================
             function getCanvasCoords(e) { const r=canvas.getBoundingClientRect(); return { x:(e.clientX-r.left)*W/r.width, y:(e.clientY-r.top)*H/r.height }; }
             function getElementCanvasRect(el) {
-                // returns {x,y,w,h} in canvas coordinates
                 const canvasRect = canvas.getBoundingClientRect();
                 const elRect = el.getBoundingClientRect();
                 const scaleX = W / canvasRect.width;
                 const scaleY = H / canvasRect.height;
-                return {
-                    x: (elRect.left - canvasRect.left) * scaleX,
-                    y: (elRect.top - canvasRect.top) * scaleY,
-                    w: elRect.width * scaleX,
-                    h: elRect.height * scaleY
-                };
+                return { x: (elRect.left - canvasRect.left) * scaleX, y: (elRect.top - canvasRect.top) * scaleY, w: elRect.width * scaleX, h: elRect.height * scaleY };
             }
 
             function performJump() {
@@ -814,9 +814,6 @@
             canvas.addEventListener('mousedown', e => { const c=getCanvasCoords(e); handleCanvasClick(c.x,c.y); });
             canvas.addEventListener('wheel', e => { if(!isScrollableScreen) return; e.preventDefault(); targetScrollY+=e.deltaY*0.6; targetScrollY=Math.max(0,Math.min(maxScrollY,targetScrollY)); updateScrollIndicators(); }, { passive:false });
 
-            muteBtn.addEventListener('click', () => { muted=!muted; saveData(); if(muted) stopMusic(); else if(gameState===STATE.PLAYING||gameState===STATE.HARD||gameState===STATE.INSANE||gameState===STATE.BOSS||gameState===STATE.BOSS2) startMusic(); });
-            shareBtn.addEventListener('click', () => { if(gameState===STATE.GAMEOVER&&score>0) { const url=new URL(window.location.href); url.searchParams.set('score',score); const str=url.toString(); if(navigator.share) navigator.share({ title:'Neon Gauntlet Score', text:`I scored ${score}!`, url:str }); else { navigator.clipboard.writeText(str).then(()=>alert('Score link copied!')); } } });
-
             document.addEventListener('keydown', e => {
                 if(e.code==='Space'||e.key===' ') { e.preventDefault(); if(gameState===STATE.GAMEOVER) { gameState=STATE.MENU; stopMusic(); clearScrollableScreen(); } else performJump(); }
                 if(e.code==='KeyE' && !paused) { e.preventDefault(); activateEquippedAbility(); }
@@ -828,11 +825,52 @@
             window.leaderboardTab = 'local';
 
             function handleCanvasClick(mx,my) {
+                // Always check mute button
+                const muteR = getElementCanvasRect(muteBtn);
+                if (mx >= muteR.x && mx <= muteR.x+muteR.w && my >= muteR.y && my <= muteR.y+muteR.h) {
+                    muted = !muted; saveData();
+                    if (muted) stopMusic(); else if (gameState===STATE.PLAYING||gameState===STATE.HARD||gameState===STATE.INSANE||gameState===STATE.BOSS||gameState===STATE.BOSS2) startMusic();
+                    return;
+                }
+
+                // GAMEOVER screen – share button and continue
+                if (gameState === STATE.GAMEOVER) {
+                    const shareR = getElementCanvasRect(shareBtn);
+                    if (mx >= shareR.x && mx <= shareR.x+shareR.w && my >= shareR.y && my <= shareR.y+shareR.h) {
+                        // Share logic (works even if score is 0)
+                        const url = new URL(window.location.href);
+                        if (score > 0) url.searchParams.set('score', score);
+                        const str = url.toString();
+                        if (navigator.share) {
+                            navigator.share({ title:'Neon Gauntlet Score', text:`I scored ${score}!`, url:str });
+                        } else {
+                            navigator.clipboard.writeText(str).then(()=>alert('Score link copied!'));
+                        }
+                        return;
+                    }
+                    // Any other click returns to menu
+                    gameState = STATE.MENU; stopMusic(); clearScrollableScreen(); return;
+                }
+
                 const isPlay = gameState===STATE.PLAYING||gameState===STATE.HARD||gameState===STATE.INSANE;
                 const isBoss = gameState===STATE.BOSS||gameState===STATE.BOSS2;
-                const gameActive = (isPlay&&!paused)||isBoss;
-                if(gameActive) {
-                    // Use converted rects
+
+                // PAUSED overlay (independent of gameActive)
+                if ((isPlay || isBoss) && paused) {
+                    // Resume button
+                    if (mx >= W/2-60 && mx <= W/2+60 && my >= H/2 && my <= H/2+45) {
+                        paused = false;
+                        startMusic();
+                        return;
+                    }
+                    // Any other click also resumes
+                    paused = false;
+                    startMusic();
+                    return;
+                }
+
+                // Game active (not paused) – gameplay buttons
+                if ((isPlay && !paused) || isBoss) {
                     const jR = getElementCanvasRect(jumpBtn);
                     if(mx >= jR.x && mx <= jR.x+jR.w && my >= jR.y && my <= jR.y+jR.h) { performJump(); return; }
                     const aR = getElementCanvasRect(abilityBtn);
@@ -841,19 +879,24 @@
                         const sR = getElementCanvasRect(slideBtn);
                         if(mx >= sR.x && mx <= sR.x+sR.w && my >= sR.y && my <= sR.y+sR.h) { performSlide(); return; }
                     }
-                    if(isPlay && !paused && mx >= W-45 && mx <= W-10 && my >= 10 && my <= 45) { paused=true; stopMusic(); return; }
-                    if(isPlay && paused) { if(mx >= W/2-60 && mx <= W/2+60 && my >= H/2 && my <= H/2+45) { paused=false; startMusic(); return; } paused=false; startMusic(); return; }
-                    performJump(); return;
+                    // Pause button
+                    if(isPlay && !paused && mx >= W-45 && mx <= W-10 && my >= 10 && my <= 45) {
+                        paused = true; stopMusic(); return;
+                    }
+                    // Any other click = jump (legacy)
+                    performJump();
+                    return;
                 }
-                if(gameState===STATE.GAMEOVER) { gameState=STATE.MENU; stopMusic(); clearScrollableScreen(); return; }
+
+                // State-specific button handling (menu, shop, settings, leaderboard)
                 if(gameState===STATE.SETTINGS && window._resetConfirm) {
                     if(mx >= W/2-100 && mx <= W/2-10 && my >= H/2+20 && my <= H/2+52) { resetAll(); loadData(); window._resetConfirm=false; gameState=STATE.MENU; clearScrollableScreen(); showMessage('All data reset!',2); return; }
                     if(mx >= W/2+10 && mx <= W/2+100 && my >= H/2+20 && my <= H/2+52) { window._resetConfirm=false; return; }
                     window._resetConfirm=false; return;
                 }
-                const btns=getCurrentButtons();
+                const btns = getCurrentButtons();
                 for(let b of btns) if(mx>=b.x && mx<=b.x+b.w && my>=b.y && my<=b.y+b.h) { handleButton(b.id); return; }
-                if(isPlay||gameState===STATE.BOSS||gameState===STATE.BOSS2) performJump();
+                // Fallback: if in game but somehow not handled, do nothing
             }
 
             function getCurrentButtons() {
@@ -897,7 +940,8 @@
 
             function handleButton(id) {
                 if(id==='normal') startRun('normal'); else if(id==='hard') startRun('hard'); else if(id==='insane') startRun('insane');
-                else if(id==='shop') { gameState=STATE.SHOP; stopMusic(); } else if(id==='leaderboard') { gameState=STATE.LEADERBOARD; stopMusic(); clearScrollableScreen(); }
+                else if(id==='shop') { gameState=STATE.SHOP; stopMusic(); }
+                else if(id==='leaderboard') { gameState=STATE.LEADERBOARD; stopMusic(); clearScrollableScreen(); }
                 else if(id==='boss'&&!bossDefeated) startBoss(false); else if(id==='boss2'&&bossDefeated&&!boss2Defeated) startBoss2();
                 else if(id==='settings') { gameState=STATE.SETTINGS; stopMusic(); clearScrollableScreen(); window._resetConfirm=false; }
                 else if(id==='back') { gameState=STATE.MENU; saveData(); clearScrollableScreen(); }
@@ -917,7 +961,8 @@
             }
 
             // ==================== INIT ====================
-            loadData(); if(bossAttemptRemaining) { bossAttemptRemaining=false; saveData(); }
+            loadData();
+            // BOSS FREE RETRY FIX – removed the line that cleared bossAttemptRemaining on load
             loadLeaderboard(); loadSharedScores(); checkURLForScore();
             stars = Array.from({length:STAR_COUNT},()=>({ x:Math.random()*W, y:Math.random()*H, speed:0.5+Math.random()*2, radius:0.5+Math.random()*1.8 }));
             document.addEventListener('touchstart', resumeAudio, {once:true}); document.addEventListener('mousedown', resumeAudio, {once:true});
